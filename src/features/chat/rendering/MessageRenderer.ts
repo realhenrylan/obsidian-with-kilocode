@@ -1,7 +1,7 @@
 // src/features/chat/rendering/MessageRenderer.ts
 
 import type { Message, ToolCallInfo } from '../../../core/types';
-import { MarkdownRenderer } from 'obsidian';
+import { App, Component, MarkdownRenderer } from 'obsidian';
 
 /**
  * 消息渲染器
@@ -9,9 +9,9 @@ import { MarkdownRenderer } from 'obsidian';
  */
 export class MessageRenderer {
   private container: HTMLElement;
-  private app: any;
+  private app: App;
 
-  constructor(container: HTMLElement, app: any) {
+  constructor(container: HTMLElement, app: App) {
     this.container = container;
     this.app = app;
   }
@@ -37,7 +37,7 @@ export class MessageRenderer {
     const headerEl = messageEl.createDiv({ cls: 'kilo-message-header' });
     headerEl.createSpan({
       cls: 'kilo-message-role',
-      text: message.role === 'user' ? 'You' : 'KiloCode',
+      text: message.role === 'user' ? 'You' : message.role === 'system' ? 'System' : 'KiloCode',
     });
     headerEl.createSpan({
       cls: 'kilo-message-time',
@@ -52,7 +52,8 @@ export class MessageRenderer {
         message.content,
         contentEl,
         '',
-        this.app
+        // Obsidian API 期望 Component，但传 app 在运行时可正常工作
+        this.app as unknown as Component
       );
     } else {
       contentEl.createSpan({ text: message.content });
