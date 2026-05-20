@@ -5,3 +5,4 @@ styles.css
 *.js.map
 .env
 .DS_Store
+.kilo/
