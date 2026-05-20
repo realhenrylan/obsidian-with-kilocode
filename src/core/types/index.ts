@@ -20,6 +20,9 @@ export interface Conversation extends ConversationMeta {
   messages: Message[];
   sessionId?: string | null;
   providerState?: Record<string, unknown>;
+  forkedFrom?: string;        // fork 来源会话 ID
+  forkedAtMessageId?: string; // fork 时的消息 ID
+  isCompacted?: boolean;      // 是否已压缩
 }
 
 /** 消息角色 */
