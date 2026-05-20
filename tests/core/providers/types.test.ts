@@ -47,3 +47,41 @@ describe('StreamChunk types', () => {
     expect(chunk.approvalRequest!.toolName).toBe('write_file');
   });
 });
+
+describe('ChatRuntime interface', () => {
+  test('sendMessage 返回 AsyncGenerator', async () => {
+    const mockRuntime: import('../../src/core/providers/types').ChatRuntime = {
+      start: jest.fn().mockResolvedValue(undefined),
+      stop: jest.fn().mockResolvedValue(undefined),
+      sendMessage: jest.fn().mockImplementation(async function* () {
+        yield { type: 'text', content: 'hello' };
+        yield { type: 'done' };
+      }),
+      cancel: jest.fn(),
+      resetSession: jest.fn(),
+      isStreaming: jest.fn().mockReturnValue(false),
+    };
+
+    const generator = mockRuntime.sendMessage('test');
+    const chunks: import('../../src/core/providers/types').StreamChunk[] = [];
+    for await (const chunk of generator) {
+      chunks.push(chunk);
+    }
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0].type).toBe('text');
+    expect(chunks[1].type).toBe('done');
+  });
+
+  test('ChatRuntime 包含 sendApproval 可选方法', () => {
+    const mockRuntime: import('../../src/core/providers/types').ChatRuntime = {
+      start: jest.fn(),
+      stop: jest.fn(),
+      sendMessage: jest.fn(),
+      cancel: jest.fn(),
+      resetSession: jest.fn(),
+      isStreaming: jest.fn(),
+      sendApproval: jest.fn(),
+    };
+    expect(mockRuntime.sendApproval).toBeDefined();
+  });
+});

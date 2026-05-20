@@ -15,26 +15,22 @@ export interface ProviderCapabilities {
   reasoningControl: 'effort' | 'token-budget' | 'none';
 }
 
-/** ChatRuntime 接口 */
+/** ChatRuntime 接口 — AsyncGenerator 模式 */
 export interface ChatRuntime {
-  /** 启动运行时 */
+  /** 启动 CLI 进程 */
   start(): Promise<void>;
-  /** 停止运行时 */
+  /** 停止 CLI 进程 */
   stop(): Promise<void>;
-  /** 发送消息 */
-  sendMessage(content: string, context?: MessageContext): Promise<void>;
-  /** 取消当前请求 */
+  /** 发送消息，返回 AsyncGenerator 消费流式响应 */
+  sendMessage(content: string, context?: MessageContext): AsyncGenerator<StreamChunk>;
+  /** 取消当前流式响应 */
   cancel(): void;
   /** 重置会话 */
   resetSession(): void;
   /** 是否正在流式响应 */
   isStreaming(): boolean;
-  /** 设置消息回调 */
-  onMessage(callback: (message: StreamMessage) => void): void;
-  /** 设置错误回调 */
-  onError(callback: (error: Error) => void): void;
-  /** 设置完成回调 */
-  onComplete(callback: () => void): void;
+  /** 发送审批决定（Phase C 预留） */
+  sendApproval?(toolName: string, decision: 'allow' | 'deny'): void;
 }
 
 /** 消息上下文 */

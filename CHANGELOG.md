@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Unit tests**: 18 tests covering PlanModeController, MCPManager, i18n modules
 - **StreamChunk types**: StreamChunkType and StreamChunk interface for async streaming (Phase A preparation)
 - **Unit tests**: 55 new tests covering TabManager, StreamController, InputController, ProviderRegistry, CommandRegistry
+
+### Changed
+
+- **ChatRuntime interface**: Refactored from callback-based (`onMessage/onError/onComplete`) to AsyncGenerator pattern (`sendMessage` returns `AsyncGenerator<StreamChunk>`); added optional `sendApproval` method
 - **Integration tests**: 5 tests covering chat workflow (TabManager, StreamController, InputController, PlanModeController)
 - **Jest configuration**: jest.config.js with ts-jest, Obsidian API mock
 
