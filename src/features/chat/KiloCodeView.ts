@@ -15,6 +15,8 @@ import { CLIErrorHandler } from '../../shared/ErrorNotice';
 import { PlanModeController } from './PlanModeController';
 import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import type { ChatRuntime } from '../../core/providers/types';
+import { ApprovalManager } from '../../core/security/ApprovalManager';
+import { showApprovalModal } from '../../core/security/ApprovalModal';
 
 export class KiloCodeView extends ItemView {
   private plugin: KiloCodePlugin;
@@ -24,6 +26,7 @@ export class KiloCodeView extends ItemView {
   private conversationService: ConversationService;
   private messageRenderer: MessageRenderer | null = null;
   private planModeController: PlanModeController;
+  private approvalManager: ApprovalManager;
 
   constructor(leaf: WorkspaceLeaf, plugin: KiloCodePlugin) {
     super(leaf);
@@ -37,6 +40,12 @@ export class KiloCodeView extends ItemView {
       plugin.app.vault.getRoot().path
     );
     this.planModeController = new PlanModeController();
+    this.approvalManager = new ApprovalManager();
+
+    // 设置审批处理器（弹出 Modal）
+    this.approvalManager.setApprovalHandler(async (request) => {
+      return showApprovalModal(this.app, request);
+    });
   }
 
   getViewType(): string {
@@ -68,6 +77,7 @@ export class KiloCodeView extends ItemView {
 
   async onClose(): Promise<void> {
     this.streamController.cancel();
+    this.approvalManager.cancelAll();
     this.inputController.cancel();
     this.messageRenderer = null;
   }
@@ -328,6 +338,9 @@ export class KiloCodeView extends ItemView {
         return;
       }
 
+      // 同步权限模式
+      this.approvalManager.setPermissionMode(this.plugin.settings.permissionMode);
+
       const generator = runtime.sendMessage(content, {
         vaultPath: this.plugin.app.vault.getRoot().path,
         currentNote: this.getCurrentNotePath(),
@@ -337,6 +350,12 @@ export class KiloCodeView extends ItemView {
       activeTab.setStreaming(true);
       this.render();
 
+      // 设置审批决定回调
+      this.streamController.setApprovalDecisionCallback((toolName, decision) => {
+        const rt = this.inputController.getRuntime();
+        rt?.sendApproval?.(toolName, decision as 'allow' | 'deny');
+      });
+
       const assistantMessage = await this.streamController.consumeStream(generator, {
         onText: (text) => this.appendToLastMessage(text),
         onToolCall: (toolCall) => this.renderToolCall(toolCall),
@@ -344,6 +363,9 @@ export class KiloCodeView extends ItemView {
         onError: (error) => new Notice(`Error: ${error}`),
         onComplete: () => {
           activeTab.setStreaming(false);
+        },
+        onApprovalRequired: async (request) => {
+          return this.approvalManager.requestApproval(request);
         },
       });
 
