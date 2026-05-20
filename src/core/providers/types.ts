@@ -1,7 +1,7 @@
 // src/core/providers/types.ts
 
-import type { ProviderId, StreamMessage, ToolCallInfo } from '../types';
-export type { ProviderId, StreamMessage, ToolCallInfo } from '../types';
+import type { ProviderId, StreamMessage, ToolCallInfo, Message } from '../types';
+export type { ProviderId, StreamMessage, ToolCallInfo, Message } from '../types';
 
 /** Provider 能力定义 */
 export interface ProviderCapabilities {

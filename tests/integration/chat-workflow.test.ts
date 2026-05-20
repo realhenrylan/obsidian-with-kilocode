@@ -4,6 +4,7 @@ import { TabManager } from '../../src/features/chat/tabs/TabManager';
 import { StreamController } from '../../src/features/chat/controllers/StreamController';
 import { InputController } from '../../src/features/chat/controllers/InputController';
 import { PlanModeController } from '../../src/features/chat/PlanModeController';
+import type { StreamChunk } from '../../src/core/providers/types';
 
 describe('Chat Workflow Integration', () => {
   let tabManager: TabManager;
@@ -27,26 +28,20 @@ describe('Chat Workflow Integration', () => {
     expect(tab.state.conversationId).toBe('conv-1');
   });
 
-  test('should handle streaming response', () => {
+  test('should handle streaming response', async () => {
     const onText = jest.fn();
     const onComplete = jest.fn();
 
-    streamController.setCallbacks({ onText, onComplete });
-    streamController.startStream();
+    async function* generator() {
+      yield { type: 'text' as const, content: 'Hello' };
+      yield { type: 'done' as const };
+    }
 
-    streamController.handleMessage({
-      type: 'text',
-      content: 'Hello',
-    });
+    const message = await streamController.consumeStream(generator(), { onText, onComplete });
 
     expect(onText).toHaveBeenCalledWith('Hello');
-
-    streamController.handleMessage({
-      type: 'done',
-    });
-
     expect(onComplete).toHaveBeenCalled();
-    expect(streamController.isCurrentlyStreaming()).toBe(false);
+    expect(message.content).toBe('Hello');
   });
 
   test('should switch modes', () => {
@@ -68,11 +63,23 @@ describe('Chat Workflow Integration', () => {
     expect(() => tabManager.createTab()).toThrow();
   });
 
-  test('should cancel streaming', () => {
-    streamController.startStream();
-    expect(streamController.isCurrentlyStreaming()).toBe(true);
+  test('should cancel streaming', async () => {
+    const onText = jest.fn();
+
+    async function* generator() {
+      yield { type: 'text' as const, content: 'part1' };
+      await new Promise(resolve => setTimeout(resolve, 100));
+      yield { type: 'text' as const, content: 'part2' };
+      yield { type: 'done' as const };
+    }
+
+    const promise = streamController.consumeStream(generator(), { onText });
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     streamController.cancel();
-    expect(streamController.isCurrentlyStreaming()).toBe(false);
+
+    const message = await promise;
+    expect(message.content).toBe('part1');
+    expect(onText).not.toHaveBeenCalledWith('part2');
   });
 });

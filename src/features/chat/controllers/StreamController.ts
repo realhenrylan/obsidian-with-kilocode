@@ -1,6 +1,5 @@
 // src/features/chat/controllers/StreamController.ts
-
-import type { StreamMessage, Message, ToolCallInfo } from '../../../core/types';
+import type { StreamChunk, Message, ToolCallInfo } from '../../../core/providers/types';
 
 export interface StreamCallbacks {
   onText?: (text: string) => void;
@@ -12,119 +11,79 @@ export interface StreamCallbacks {
 
 /**
  * 流式响应控制器
- * 处理来自 KiloCode CLI 的流式消息
+ * 通过 for await 消费 AsyncGenerator<StreamChunk>，组装完整 Message
  */
 export class StreamController {
-  private callbacks: StreamCallbacks = {};
-  private currentMessage: Partial<Message> = {};
-  private isStreaming = false;
+  private abortController: AbortController | null = null;
 
-  /** 设置回调 */
-  setCallbacks(callbacks: StreamCallbacks): void {
-    this.callbacks = callbacks;
-  }
+  /**
+   * 消费 AsyncGenerator 流式响应，返回组装好的 Message
+   */
+  async consumeStream(
+    generator: AsyncGenerator<StreamChunk>,
+    callbacks: StreamCallbacks,
+  ): Promise<Message> {
+    this.abortController = new AbortController();
 
-  /** 开始新的流式响应 */
-  startStream(): void {
-    this.isStreaming = true;
-    this.currentMessage = {
+    const message: Message = {
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
       toolCalls: [],
     };
-  }
 
-  /** 处理流式消息 */
-  handleMessage(message: StreamMessage): void {
-    if (!message || typeof message.type !== 'string') {
-      this.handleError('Invalid message: missing or invalid type');
-      return;
-    }
+    try {
+      for await (const chunk of generator) {
+        if (this.abortController.signal.aborted) break;
 
-    switch (message.type) {
-      case 'text':
-        this.handleTextMessage(message.content || '');
-        break;
-      case 'tool_use':
-        if (!message.toolCall) {
-          this.handleError('Invalid tool_use message: missing toolCall');
-          return;
+        switch (chunk.type) {
+          case 'text':
+            message.content += chunk.content || '';
+            callbacks.onText?.(chunk.content || '');
+            break;
+
+          case 'tool_use':
+            if (chunk.toolCall) {
+              message.toolCalls!.push(chunk.toolCall);
+              callbacks.onToolCall?.(chunk.toolCall);
+            }
+            break;
+
+          case 'tool_result':
+            if (chunk.toolCall) {
+              this.updateToolCall(message.toolCalls!, chunk.toolCall);
+              callbacks.onToolResult?.(chunk.toolCall.id, chunk.toolCall.result || '');
+            }
+            break;
+
+          case 'error':
+            callbacks.onError?.(chunk.error || 'Unknown error');
+            break;
+
+          case 'done':
+            callbacks.onComplete?.();
+            break;
         }
-        this.handleToolUse(message.toolCall);
-        break;
-      case 'tool_result':
-        if (!message.toolCall) {
-          this.handleError('Invalid tool_result message: missing toolCall');
-          return;
-        }
-        this.handleToolResult(message.toolCall);
-        break;
-      case 'error':
-        this.handleError(message.error || 'Unknown error');
-        break;
-      case 'done':
-        this.handleDone();
-        break;
-    }
-  }
-
-  /** 处理文本消息 */
-  private handleTextMessage(text: string): void {
-    if (this.currentMessage) {
-      this.currentMessage.content = (this.currentMessage.content || '') + text;
-    }
-    this.callbacks.onText?.(text);
-  }
-
-  /** 处理工具调用 */
-  private handleToolUse(toolCall: ToolCallInfo): void {
-    if (this.currentMessage?.toolCalls) {
-      this.currentMessage.toolCalls.push(toolCall);
-    }
-    this.callbacks.onToolCall?.(toolCall);
-  }
-
-  /** 处理工具结果 */
-  private handleToolResult(toolCall: ToolCallInfo): void {
-    if (this.currentMessage?.toolCalls) {
-      const existing = this.currentMessage.toolCalls.find(tc => tc.id === toolCall.id);
-      if (existing) {
-        existing.status = toolCall.status;
-        existing.result = toolCall.result;
-        existing.error = toolCall.error;
-        existing.endTime = Date.now();
       }
+    } catch (err) {
+      callbacks.onError?.(err instanceof Error ? err.message : String(err));
     }
-    this.callbacks.onToolResult?.(toolCall.id, toolCall.result || '');
+
+    return message;
   }
 
-  /** 处理错误 */
-  private handleError(error: string): void {
-    this.isStreaming = false;
-    this.callbacks.onError?.(error);
-  }
-
-  /** 处理完成 */
-  private handleDone(): void {
-    this.isStreaming = false;
-    this.callbacks.onComplete?.();
-  }
-
-  /** 获取当前消息 */
-  getCurrentMessage(): Message | null {
-    if (!this.currentMessage || !this.currentMessage.id) return null;
-    return this.currentMessage as Message;
-  }
-
-  /** 是否正在流式响应 */
-  isCurrentlyStreaming(): boolean {
-    return this.isStreaming;
-  }
-
-  /** 取消流式响应 */
   cancel(): void {
-    this.isStreaming = false;
+    this.abortController?.abort();
+  }
+
+  private updateToolCall(toolCalls: ToolCallInfo[], update: ToolCallInfo): void {
+    const existing = toolCalls.find(tc => tc.id === update.id);
+    if (existing) {
+      existing.status = update.status;
+      existing.result = update.result;
+      existing.error = update.error;
+      existing.endTime = Date.now();
+    }
   }
 }

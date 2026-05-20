@@ -18,10 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Unit tests**: 7 new tests covering KiloCodeChatRuntime AsyncGenerator behavior (text/tool_use/error chunks, partial lines, cancel, sendApproval)
 - **StreamChunk types**: StreamChunkType and StreamChunk interface for async streaming (Phase A preparation)
 - **Unit tests**: 55 new tests covering TabManager, StreamController, InputController, ProviderRegistry, CommandRegistry
+- **StreamController**: Refactored to AsyncGenerator pattern — `consumeStream(generator, callbacks)` returns `Promise<Message>`; `cancel()` uses AbortController to break the for-await loop
+- **Unit tests**: 6 new tests covering StreamController AsyncGenerator consumption (text/tool_use+tool_result/error/cancel/empty-stream/mixed-messages)
 
 ### Changed
 
 - **ChatRuntime interface**: Refactored from callback-based (`onMessage/onError/onComplete`) to AsyncGenerator pattern (`sendMessage` returns `AsyncGenerator<StreamChunk>`); added optional `sendApproval` method
+- **Integration tests**: Updated chat-workflow tests to use new StreamController AsyncGenerator API
 - **Integration tests**: 5 tests covering chat workflow (TabManager, StreamController, InputController, PlanModeController)
 - **Jest configuration**: jest.config.js with ts-jest, Obsidian API mock
 

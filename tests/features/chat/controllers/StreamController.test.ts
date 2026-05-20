@@ -1,5 +1,11 @@
 import { StreamController, StreamCallbacks } from '../../../../src/features/chat/controllers/StreamController';
-import type { StreamMessage, ToolCallInfo } from '../../../../src/core/types';
+import type { StreamChunk, Message, ToolCallInfo } from '../../../../src/core/providers/types';
+
+async function* mockGenerator(chunks: StreamChunk[]): AsyncGenerator<StreamChunk> {
+  for (const chunk of chunks) {
+    yield chunk;
+  }
+}
 
 describe('StreamController', () => {
   let controller: StreamController;
@@ -8,218 +14,126 @@ describe('StreamController', () => {
     controller = new StreamController();
   });
 
-  describe('startStream', () => {
-    test('creates message skeleton and sets streaming', () => {
-      controller.startStream();
-      expect(controller.isCurrentlyStreaming()).toBe(true);
-      const msg = controller.getCurrentMessage();
-      expect(msg).not.toBeNull();
-      expect(msg!.role).toBe('assistant');
-      expect(msg!.content).toBe('');
-      expect(msg!.toolCalls).toEqual([]);
-      expect(msg!.id).toMatch(/^msg-/);
-    });
-  });
-
-  describe('handleMessage - text', () => {
-    test('accumulates content and calls onText', () => {
+  describe('consumeStream — text', () => {
+    test('累积文本内容并调用 onText 回调', async () => {
       const onText = jest.fn();
-      controller.setCallbacks({ onText });
-      controller.startStream();
+      const onComplete = jest.fn();
 
-      controller.handleMessage({ type: 'text', content: 'Hello' });
-      controller.handleMessage({ type: 'text', content: ' World' });
+      const generator = mockGenerator([
+        { type: 'text', content: 'Hello ' },
+        { type: 'text', content: 'World' },
+        { type: 'done' },
+      ]);
+
+      const message = await controller.consumeStream(generator, { onText, onComplete });
 
       expect(onText).toHaveBeenCalledTimes(2);
-      expect(onText).toHaveBeenNthCalledWith(1, 'Hello');
-      expect(onText).toHaveBeenNthCalledWith(2, ' World');
-      expect(controller.getCurrentMessage()!.content).toBe('Hello World');
-    });
-
-    test('handles text message with missing content', () => {
-      const onText = jest.fn();
-      controller.setCallbacks({ onText });
-      controller.startStream();
-
-      controller.handleMessage({ type: 'text' });
-      expect(onText).toHaveBeenCalledWith('');
+      expect(onText).toHaveBeenNthCalledWith(1, 'Hello ');
+      expect(onText).toHaveBeenNthCalledWith(2, 'World');
+      expect(message.content).toBe('Hello World');
+      expect(message.role).toBe('assistant');
+      expect(onComplete).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('handleMessage - tool_use', () => {
-    test('adds to toolCalls and calls onToolCall', () => {
+  describe('consumeStream — tool_use + tool_result', () => {
+    test('处理工具调用和结果', async () => {
       const onToolCall = jest.fn();
-      controller.setCallbacks({ onToolCall });
-      controller.startStream();
+      const onToolResult = jest.fn();
 
       const toolCall: ToolCallInfo = {
-        id: 'tc-1',
-        name: 'read_file',
-        input: { path: '/test' },
-        status: 'pending',
+        id: 'tc-1', name: 'read_file', input: { path: '/test' }, status: 'pending',
+      };
+      const toolResult: ToolCallInfo = {
+        id: 'tc-1', name: 'read_file', input: { path: '/test' }, status: 'completed', result: 'content',
       };
 
-      controller.handleMessage({ type: 'tool_use', toolCall });
+      const generator = mockGenerator([
+        { type: 'tool_use', toolCall },
+        { type: 'tool_result', toolCall: toolResult },
+        { type: 'done' },
+      ]);
+
+      const message = await controller.consumeStream(generator, { onToolCall, onToolResult });
 
       expect(onToolCall).toHaveBeenCalledWith(toolCall);
-      expect(controller.getCurrentMessage()!.toolCalls).toHaveLength(1);
-      expect(controller.getCurrentMessage()!.toolCalls![0]).toBe(toolCall);
-    });
-
-    test('calls onError if toolCall missing', () => {
-      const onError = jest.fn();
-      controller.setCallbacks({ onError });
-      controller.startStream();
-
-      controller.handleMessage({ type: 'tool_use' });
-
-      expect(onError).toHaveBeenCalledWith('Invalid tool_use message: missing toolCall');
-      expect(controller.isCurrentlyStreaming()).toBe(false);
+      expect(onToolResult).toHaveBeenCalledWith('tc-1', 'content');
+      expect(message.toolCalls).toHaveLength(1);
+      expect(message.toolCalls![0].status).toBe('completed');
     });
   });
 
-  describe('handleMessage - tool_result', () => {
-    test('updates existing tool call and calls onToolResult', () => {
-      const onToolResult = jest.fn();
-      controller.setCallbacks({ onToolResult });
-      controller.startStream();
-
-      const toolCall: ToolCallInfo = {
-        id: 'tc-1',
-        name: 'read_file',
-        input: { path: '/test' },
-        status: 'pending',
-      };
-      controller.handleMessage({ type: 'tool_use', toolCall });
-
-      const resultToolCall: ToolCallInfo = {
-        id: 'tc-1',
-        name: 'read_file',
-        input: { path: '/test' },
-        status: 'completed',
-        result: 'file contents',
-      };
-      controller.handleMessage({ type: 'tool_result', toolCall: resultToolCall });
-
-      expect(onToolResult).toHaveBeenCalledWith('tc-1', 'file contents');
-      const msgToolCalls = controller.getCurrentMessage()!.toolCalls!;
-      expect(msgToolCalls[0].status).toBe('completed');
-      expect(msgToolCalls[0].result).toBe('file contents');
-    });
-
-    test('calls onError if toolCall missing', () => {
+  describe('consumeStream — error', () => {
+    test('调用 onError 回调', async () => {
       const onError = jest.fn();
-      controller.setCallbacks({ onError });
-      controller.startStream();
 
-      controller.handleMessage({ type: 'tool_result' });
+      const generator = mockGenerator([
+        { type: 'error', error: 'CLI crashed' },
+      ]);
 
-      expect(onError).toHaveBeenCalledWith('Invalid tool_result message: missing toolCall');
-    });
-  });
+      const message = await controller.consumeStream(generator, { onError });
 
-  describe('handleMessage - error', () => {
-    test('sets streaming false and calls onError', () => {
-      const onError = jest.fn();
-      controller.setCallbacks({ onError });
-      controller.startStream();
-
-      controller.handleMessage({ type: 'error', error: 'something broke' });
-
-      expect(controller.isCurrentlyStreaming()).toBe(false);
-      expect(onError).toHaveBeenCalledWith('something broke');
-    });
-
-    test('uses default error message when error field missing', () => {
-      const onError = jest.fn();
-      controller.setCallbacks({ onError });
-      controller.startStream();
-
-      controller.handleMessage({ type: 'error' });
-      expect(onError).toHaveBeenCalledWith('Unknown error');
-    });
-  });
-
-  describe('handleMessage - done', () => {
-    test('sets streaming false and calls onComplete', () => {
-      const onComplete = jest.fn();
-      controller.setCallbacks({ onComplete });
-      controller.startStream();
-
-      controller.handleMessage({ type: 'done' });
-
-      expect(controller.isCurrentlyStreaming()).toBe(false);
-      expect(onComplete).toHaveBeenCalled();
-    });
-  });
-
-  describe('handleMessage - null/invalid', () => {
-    test('calls onError for null message', () => {
-      const onError = jest.fn();
-      controller.setCallbacks({ onError });
-
-      controller.handleMessage(null as unknown as StreamMessage);
-      expect(onError).toHaveBeenCalledWith('Invalid message: missing or invalid type');
-    });
-
-    test('calls onError for message with invalid type', () => {
-      const onError = jest.fn();
-      controller.setCallbacks({ onError });
-
-      controller.handleMessage({ type: 123 } as unknown as StreamMessage);
-      expect(onError).toHaveBeenCalledWith('Invalid message: missing or invalid type');
-    });
-  });
-
-  describe('getCurrentMessage', () => {
-    test('returns null before startStream', () => {
-      expect(controller.getCurrentMessage()).toBeNull();
-    });
-
-    test('returns message after startStream', () => {
-      controller.startStream();
-      expect(controller.getCurrentMessage()).not.toBeNull();
-    });
-  });
-
-  describe('isCurrentlyStreaming', () => {
-    test('returns false initially', () => {
-      expect(controller.isCurrentlyStreaming()).toBe(false);
-    });
-
-    test('returns true after startStream', () => {
-      controller.startStream();
-      expect(controller.isCurrentlyStreaming()).toBe(true);
+      expect(onError).toHaveBeenCalledWith('CLI crashed');
+      expect(message.content).toBe('');
     });
   });
 
   describe('cancel', () => {
-    test('sets streaming to false', () => {
-      controller.startStream();
-      expect(controller.isCurrentlyStreaming()).toBe(true);
+    test('中断 consumeStream 循环', async () => {
+      const onText = jest.fn();
+
+      async function* slowGenerator(): AsyncGenerator<StreamChunk> {
+        yield { type: 'text', content: 'part1' };
+        await new Promise(resolve => setTimeout(resolve, 100));
+        yield { type: 'text', content: 'part2' };
+        yield { type: 'done' };
+      }
+
+      const promise = controller.consumeStream(slowGenerator(), { onText });
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(onText).toHaveBeenCalledWith('part1');
+
       controller.cancel();
-      expect(controller.isCurrentlyStreaming()).toBe(false);
+
+      const message = await promise;
+      expect(message.content).toBe('part1');
+      expect(onText).not.toHaveBeenCalledWith('part2');
     });
   });
 
-  describe('setCallbacks', () => {
-    test('replaces callbacks', () => {
-      const onText1 = jest.fn();
-      const onText2 = jest.fn();
-      controller.setCallbacks({ onText: onText1 });
-      controller.setCallbacks({ onText: onText2 });
-      controller.startStream();
-      controller.handleMessage({ type: 'text', content: 'hi' });
-      expect(onText1).not.toHaveBeenCalled();
-      expect(onText2).toHaveBeenCalledWith('hi');
+  describe('consumeStream — 空流', () => {
+    test('空 generator 返回空消息', async () => {
+      async function* emptyGenerator(): AsyncGenerator<StreamChunk> {}
+
+      const message = await controller.consumeStream(emptyGenerator(), {});
+
+      expect(message.content).toBe('');
+      expect(message.role).toBe('assistant');
     });
   });
 
-  test('multiple text messages accumulate correctly', () => {
-    controller.startStream();
-    controller.handleMessage({ type: 'text', content: 'a' });
-    controller.handleMessage({ type: 'text', content: 'b' });
-    controller.handleMessage({ type: 'text', content: 'c' });
-    expect(controller.getCurrentMessage()!.content).toBe('abc');
+  describe('consumeStream — 混合消息', () => {
+    test('正确处理 text + tool_use + text + done 序列', async () => {
+      const onText = jest.fn();
+      const onToolCall = jest.fn();
+
+      const toolCall: ToolCallInfo = {
+        id: 'tc-1', name: 'bash', input: { command: 'ls' }, status: 'pending',
+      };
+
+      const generator = mockGenerator([
+        { type: 'text', content: 'I will run a command.\n' },
+        { type: 'tool_use', toolCall },
+        { type: 'text', content: 'Command completed.\n' },
+        { type: 'done' },
+      ]);
+
+      const message = await controller.consumeStream(generator, { onText, onToolCall });
+
+      expect(message.content).toBe('I will run a command.\nCommand completed.\n');
+      expect(message.toolCalls).toHaveLength(1);
+      expect(onText).toHaveBeenCalledTimes(2);
+    });
   });
 });
