@@ -14,6 +14,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   private errorCallback: ((error: Error) => void) | null = null;
   private completeCallback: (() => void) | null = null;
   private cliPath: string;
+  private stdoutBuffer = '';
 
   constructor(cliPath: string = 'kilo') {
     this.cliPath = cliPath;
@@ -23,7 +24,6 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     try {
       this.process = spawn(this.cliPath, ['--mode', 'json-rpc'], {
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true,
       });
 
       this.process.stdout?.on('data', (data: Buffer) => {
@@ -115,19 +115,26 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   }
 
   private handleStdout(data: string): void {
-    try {
-      const lines = data.split('\n').filter(line => line.trim());
-      for (const line of lines) {
-        const message = JSON.parse(line) as StreamMessage;
+    // 累积数据到缓冲区，处理跨 chunk 的部分行
+    this.stdoutBuffer += data;
+    const lines = this.stdoutBuffer.split('\n');
+    // 最后一个元素可能是不完整的行，保留在缓冲区
+    this.stdoutBuffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const message = JSON.parse(trimmed) as StreamMessage;
         this.messageCallback?.(message);
 
         if (message.type === 'done') {
           this.streaming = false;
           this.completeCallback?.();
         }
+      } catch {
+        // 非 JSON 输出，忽略
       }
-    } catch {
-      // 非 JSON 输出，忽略
     }
   }
 }
