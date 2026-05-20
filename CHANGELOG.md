@@ -4,11 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.4.0] - 2026-05-20
 
 ### Added
 
-- **Integration tests**: Chat workflow integration tests covering TabManager, StreamController, InputController, and PlanModeController collaboration
+- **Plan Mode**: PlanModeController with code/plan/ask modes, mode toggle button, Shift+Tab hotkey, message prefix injection
+- **MCP Server support**: MCPManager for server connection management, MCPToolAdapter for tool format conversion
+- **i18n**: Internationalization system with English and Chinese translations, dot-notation keys, parameter substitution
+- **Virtual scrolling**: VirtualScroller for performance optimization with large message lists (>50 messages)
+- **Unit tests**: 18 tests covering PlanModeController, MCPManager, i18n modules
+- **Integration tests**: 5 tests covering chat workflow (TabManager, StreamController, InputController, PlanModeController)
+- **Jest configuration**: jest.config.js with ts-jest, Obsidian API mock
 
 ## [0.3.0] - 2026-05-20
 
