@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Provider registry**: ProviderRegistry static class for managing AI providers
 - **KiloCode provider**: capabilities, settings, models, ChatRuntime (JSON-RPC over stdio), registration
 - **Plugin entry point**: KiloCodePlugin class with settings management, view registration, ribbon icon, commands
+- **StreamController**: streaming response handler with text/tool/error callbacks
 - **Build verification**: TypeScript type checking and esbuild production build both pass
 
 ### Fixed
