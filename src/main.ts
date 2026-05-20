@@ -1,6 +1,6 @@
 // src/main.ts
 
-import { Plugin, WorkspaceLeaf } from 'obsidian';
+import { App, ItemView, Plugin, PluginSettingTab, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_KILOCODE } from './core/types';
 import type { KiloCodeSettings } from './core/types';
 import { DEFAULT_SETTINGS } from './app/settings/defaultSettings';
@@ -8,7 +8,7 @@ import { ProviderRegistry } from './core/providers/ProviderRegistry';
 import { kilocodeProviderRegistration } from './providers/kilocode/registration';
 
 export default class KiloCodePlugin extends Plugin {
-  settings!: KiloCodeSettings;
+  settings: KiloCodeSettings = DEFAULT_SETTINGS;
 
   async onload() {
     await this.loadSettings();
@@ -77,10 +77,21 @@ export default class KiloCodePlugin extends Plugin {
 }
 
 // 临时占位，后续任务会完善
-class KiloCodeView {
-  constructor(leaf: WorkspaceLeaf, plugin: KiloCodePlugin) {}
+class KiloCodeView extends ItemView {
+  constructor(leaf: WorkspaceLeaf, private plugin: KiloCodePlugin) {
+    super(leaf);
+  }
+
+  getViewType() { return VIEW_TYPE_KILOCODE; }
+  getDisplayText() { return 'KiloCode'; }
+  getIcon() { return 'bot'; }
+  async display() {}
 }
 
-class KiloCodeSettingTab {
-  constructor(app: any, plugin: KiloCodePlugin) {}
+class KiloCodeSettingTab extends PluginSettingTab {
+  constructor(app: App, private plugin: KiloCodePlugin) {
+    super(app, plugin);
+  }
+
+  display() {}
 }
