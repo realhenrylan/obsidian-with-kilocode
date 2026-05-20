@@ -3,7 +3,8 @@
 </p>
 
 <p align="center">
-  <img src="assets/logo.png" alt="KiloCode for Obsidian" width="200">
+  <img src="assets/kilocode-logo.png" alt="KiloCode" width="120" style="margin-right: 20px;">
+  <img src="assets/obsidian-logo.svg" alt="Obsidian" width="120">
 </p>
 
 <h1 align="center">KiloCode for Obsidian</h1>
