@@ -2,6 +2,7 @@
 
 import type { Message, ToolCallInfo } from '../../../core/types';
 import { App, Component, MarkdownRenderer } from 'obsidian';
+import { VirtualScroller } from '../../../shared/VirtualScroller';
 
 /**
  * 消息渲染器
@@ -10,6 +11,7 @@ import { App, Component, MarkdownRenderer } from 'obsidian';
 export class MessageRenderer {
   private container: HTMLElement;
   private app: App;
+  private virtualScroller: VirtualScroller | null = null;
 
   constructor(container: HTMLElement, app: App) {
     this.container = container;
@@ -20,11 +22,19 @@ export class MessageRenderer {
   renderMessages(messages: Message[]): void {
     this.container.empty();
 
-    for (const message of messages) {
-      this.renderMessage(message);
+    if (messages.length > 50) {
+      this.virtualScroller = new VirtualScroller(
+        this.container,
+        { itemHeight: 100, overscan: 5 },
+        (message, index) => this.renderMessage(message)
+      );
+      this.virtualScroller.setItems(messages);
+    } else {
+      for (const message of messages) {
+        this.renderMessage(message);
+      }
+      this.scrollToBottom();
     }
-
-    this.scrollToBottom();
   }
 
   /** 渲染单条消息 */
