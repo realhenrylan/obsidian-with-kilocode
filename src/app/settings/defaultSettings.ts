@@ -17,4 +17,5 @@ export const DEFAULT_SETTINGS: KiloCodeSettings = {
   autoSave: true,
   theme: 'auto',
   fontSize: 14,
+  compactKeepRecent: 5,
 };

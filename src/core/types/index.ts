@@ -84,6 +84,8 @@ export interface KiloCodeSettings {
   autoSave: boolean;
   theme: 'auto' | 'light' | 'dark';
   fontSize: number;
+  /** compact 保留最近消息数 */
+  compactKeepRecent: number;
 }
 
 /** 视图类型常量 */
