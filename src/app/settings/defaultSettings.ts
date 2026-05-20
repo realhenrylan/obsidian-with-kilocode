@@ -18,4 +18,5 @@ export const DEFAULT_SETTINGS: KiloCodeSettings = {
   theme: 'auto',
   fontSize: 14,
   compactKeepRecent: 5,
+  permissionMode: 'normal',
 };

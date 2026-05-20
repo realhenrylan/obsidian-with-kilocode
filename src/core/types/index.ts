@@ -86,6 +86,8 @@ export interface KiloCodeSettings {
   fontSize: number;
   /** compact 保留最近消息数 */
   compactKeepRecent: number;
+  /** 权限模式：yolo（全自动）/ normal（逐次审批）/ plan（只读） */
+  permissionMode: 'yolo' | 'normal' | 'plan';
 }
 
 /** 视图类型常量 */
