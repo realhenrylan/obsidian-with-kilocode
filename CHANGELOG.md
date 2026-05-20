@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Inline Edit integration**: InlineEditModal and DiffViewer integrated into KiloCodeView with `Ctrl+Shift+E` hotkey
 - **Tab management**: Tab and TabManager classes for managing multiple chat tabs with persistence
 - **StreamController**: streaming response handler with text/tool/error callbacks
 - **InputController**: user input handler bridging UI with ChatRuntime
