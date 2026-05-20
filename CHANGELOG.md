@@ -4,11 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.0] - 2026-05-20
+
+### Added
+
+- **Inline Edit**: InlineEditModal for editing selected text with instructions, DiffViewer for previewing changes
+- **Slash Commands**: CommandRegistry with /compact, /clear, /model, /mode commands; CommandPalette with keyboard navigation
+- **@mention system**: MentionService for searching vault files/folders, MentionDropdown with grouped results
+- **Settings panel**: KiloCodeSettingTab with General, Chat, Model, Appearance sections
+- **Error handling**: ErrorNotice with severity levels (info/warning/error/fatal), CLIErrorHandler for common CLI errors
+- **KiloCodeSettings扩展**: 新增 autoStart, defaultModel, temperature, autoSave, theme, fontSize 字段
+
+### Fixed
+
+- **DiffViewer**: CustomEvents now bubble to parent elements
+- **InlineEditModal**: removed unused import
+
 ## [0.2.0] - 2026-05-20
 
 ### Added
 
-- **Inline Edit integration**: InlineEditModal and DiffViewer integrated into KiloCodeView with `Ctrl+Shift+E` hotkey
 - **Tab management**: Tab and TabManager classes for managing multiple chat tabs with persistence
 - **StreamController**: streaming response handler with text/tool/error callbacks
 - **InputController**: user input handler bridging UI with ChatRuntime
@@ -16,7 +31,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **MessageRenderer**: renders messages as HTML with Markdown support, tool call display, and streaming text append
 - **KiloCodeView**: main chat interface integrating all Phase 2 components
 - **Base styles**: `styles.css` with KiloCode branding theme, CSS custom properties for light/dark mode
-- **@mention system**: MentionService for searching vault files/folders, MentionDropdown for rendering grouped results
 
 ### Fixed
 
