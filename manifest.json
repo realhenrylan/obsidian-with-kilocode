@@ -1,0 +1,10 @@
+{
+  "id": "kilocode",
+  "name": "KiloCode",
+  "version": "0.1.0",
+  "minAppVersion": "1.7.2",
+  "description": "KiloCode AI coding agent embedded in Obsidian sidebar. Your vault becomes the agent's working directory.",
+  "author": "",
+  "authorUrl": "",
+  "isDesktopOnly": true
+}
