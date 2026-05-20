@@ -1,5 +1,6 @@
 // src/features/chat/controllers/StreamController.ts
 import type { StreamChunk, Message, ToolCallInfo } from '../../../core/providers/types';
+import type { ApprovalRequest, ApprovalDecision } from '../../../core/security/ApprovalManager';
 
 export interface StreamCallbacks {
   onText?: (text: string) => void;
@@ -7,6 +8,7 @@ export interface StreamCallbacks {
   onToolResult?: (toolCallId: string, result: string) => void;
   onError?: (error: string) => void;
   onComplete?: () => void;
+  onApprovalRequired?: (request: ApprovalRequest) => Promise<ApprovalDecision>;
 }
 
 /**
@@ -15,6 +17,12 @@ export interface StreamCallbacks {
  */
 export class StreamController {
   private abortController: AbortController | null = null;
+  private onApprovalDecision: ((toolName: string, decision: string) => void) | null = null;
+
+  /** 设置审批决定回调（用于通知 runtime） */
+  setApprovalDecisionCallback(callback: (toolName: string, decision: string) => void): void {
+    this.onApprovalDecision = callback;
+  }
 
   /**
    * 消费 AsyncGenerator 流式响应，返回组装好的 Message
@@ -63,6 +71,24 @@ export class StreamController {
 
           case 'done':
             callbacks.onComplete?.();
+            break;
+
+          case 'approval_required':
+            if (chunk.approvalRequest && callbacks.onApprovalRequired) {
+              const decision = await callbacks.onApprovalRequired({
+                id: `approval-${Date.now()}`,
+                toolName: chunk.approvalRequest.toolName,
+                input: chunk.approvalRequest.input,
+                description: chunk.approvalRequest.description,
+              });
+              // 通知 runtime 审批结果
+              if (this.onApprovalDecision) {
+                this.onApprovalDecision(chunk.approvalRequest.toolName, decision);
+              }
+              if (decision === 'cancel') {
+                this.cancel();
+              }
+            }
             break;
         }
       }
