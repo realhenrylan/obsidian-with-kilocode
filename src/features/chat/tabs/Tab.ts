@@ -3,6 +3,9 @@ export interface TabState {
   conversationId: string | null;
   isStreaming: boolean;
   draftMessage: string;
+  isForked?: boolean;
+  forkSourceId?: string;
+  scrollPosition?: number;
 }
 
 export class Tab {
