@@ -22,13 +22,15 @@ export class TabManager {
     return tab;
   }
 
-  /** 关闭标签页 */
-  closeTab(tabId: string): void {
+  /** 关闭标签页，返回是否成功关闭 */
+  closeTab(tabId: string): boolean {
+    if (!this.tabs.has(tabId)) return false;
     this.tabs.delete(tabId);
     if (this.activeTabId === tabId) {
       const remaining = Array.from(this.tabs.keys());
       this.activeTabId = remaining.length > 0 ? remaining[remaining.length - 1] : null;
     }
+    return true;
   }
 
   /** 切换到指定标签页 */
@@ -61,10 +63,10 @@ export class TabManager {
     return this.tabs.size < this.maxTabs;
   }
 
-  /** 获取持久化状态 */
+  /** 获取持久化状态（返回副本，防止外部修改内部状态） */
   getPersistedState(): { openTabs: TabState[]; activeTabId: string | null } {
     return {
-      openTabs: Array.from(this.tabs.values()).map(tab => tab.state),
+      openTabs: Array.from(this.tabs.values()).map(tab => ({ ...tab.state })),
       activeTabId: this.activeTabId,
     };
   }
@@ -74,9 +76,11 @@ export class TabManager {
     this.tabs.clear();
     for (const tabState of state.openTabs) {
       const tab = new Tab(tabState.id);
-      tab.state = tabState;
+      tab.restoreFromState(tabState);
       this.tabs.set(tabState.id, tab);
     }
-    this.activeTabId = state.activeTabId;
+    this.activeTabId = state.activeTabId && this.tabs.has(state.activeTabId)
+      ? state.activeTabId
+      : null;
   }
 }

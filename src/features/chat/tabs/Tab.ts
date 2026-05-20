@@ -6,17 +6,19 @@ export interface TabState {
 }
 
 export class Tab {
-  id: string;
-  state: TabState;
+  readonly state: TabState;
 
   constructor(id: string) {
-    this.id = id;
     this.state = {
       id,
       conversationId: null,
       isStreaming: false,
       draftMessage: '',
     };
+  }
+
+  get id(): string {
+    return this.state.id;
   }
 
   setConversation(conversationId: string): void {
@@ -29,5 +31,12 @@ export class Tab {
 
   setDraftMessage(message: string): void {
     this.state.draftMessage = message;
+  }
+
+  /** 从持久化状态恢复内部数据 */
+  restoreFromState(saved: TabState): void {
+    this.state.conversationId = saved.conversationId;
+    this.state.isStreaming = saved.isStreaming;
+    this.state.draftMessage = saved.draftMessage;
   }
 }
