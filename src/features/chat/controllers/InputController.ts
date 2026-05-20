@@ -16,14 +16,21 @@ export class InputController {
   private callbacks: InputCallbacks = {};
   private isStreaming = false;
 
-  /** 设置运行时 */
+  /** 设置运行时，并绑定 onComplete/onError 回调自动管理 isStreaming 状态 */
   setRuntime(runtime: ChatRuntime): void {
     this.runtime = runtime;
+
+    this.runtime.onComplete(() => {
+      this.isStreaming = false;
+    });
+    this.runtime.onError(() => {
+      this.isStreaming = false;
+    });
   }
 
-  /** 设置回调 */
+  /** 设置回调，与已有回调合并 */
   setCallbacks(callbacks: InputCallbacks): void {
-    this.callbacks = callbacks;
+    this.callbacks = { ...this.callbacks, ...callbacks };
   }
 
   /** 发送消息 */
@@ -37,10 +44,10 @@ export class InputController {
     }
 
     this.isStreaming = true;
-    this.callbacks.onSend?.(content);
 
     try {
       await this.runtime.sendMessage(content);
+      this.callbacks.onSend?.(content);
     } catch (error) {
       this.isStreaming = false;
       throw error;
@@ -59,10 +66,5 @@ export class InputController {
   /** 是否正在流式响应 */
   isCurrentlyStreaming(): boolean {
     return this.isStreaming;
-  }
-
-  /** 设置流式状态 */
-  setStreaming(streaming: boolean): void {
-    this.isStreaming = streaming;
   }
 }
