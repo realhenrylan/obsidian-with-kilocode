@@ -96,6 +96,9 @@ export class KiloCodeView extends ItemView {
 
     // 操作栏
     this.renderActionBar(container);
+
+    // 注册消息操作事件委托（rewind/fork/copy）
+    this.registerMessageActionListeners();
   }
 
   /** 渲染模式切换 */
@@ -404,5 +407,99 @@ export class KiloCodeView extends ItemView {
   private handleCancel(): void {
     this.inputController.cancel();
     this.streamController.cancel();
+  }
+
+  /** 注册消息操作事件委托（事件冒泡捕获 rewind/fork/copy 按钮点击） */
+  private registerMessageActionListeners(): void {
+    const container = this.containerEl.querySelector('.kilo-messages');
+    if (!container) return;
+
+    this.registerDomEvent(container as HTMLElement, 'click', (e) => {
+      const target = e.target as HTMLElement;
+      const btn = target.closest('.kilo-action-btn') as HTMLElement;
+      if (!btn) return;
+
+      const action = btn.dataset.action;
+      const messageId = btn.dataset.messageId;
+      if (!action || !messageId) return;
+
+      switch (action) {
+        case 'rewind':
+          this.handleRewind(messageId);
+          break;
+        case 'fork':
+          this.handleFork(messageId);
+          break;
+        case 'copy':
+          this.handleCopy(messageId);
+          break;
+      }
+    });
+  }
+
+  /** 回退到指定消息，丢弃之后的所有消息 */
+  private async handleRewind(messageId: string): Promise<void> {
+    const activeTab = this.tabManager.getActiveTab();
+    if (!activeTab?.state.conversationId) return;
+
+    const confirmed = confirm('Rewind to this message? All subsequent messages will be removed.');
+    if (!confirmed) return;
+
+    try {
+      const removed = await this.conversationService.rewindToMessage(
+        activeTab.state.conversationId,
+        messageId,
+      );
+      new Notice(`Rewound. Removed ${removed.length} message(s).`);
+      this.render();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      new Notice(`Rewind failed: ${msg}`);
+    }
+  }
+
+  /** 从指定消息处 fork 新会话并在新标签页打开 */
+  private async handleFork(messageId: string): Promise<void> {
+    const activeTab = this.tabManager.getActiveTab();
+    if (!activeTab?.state.conversationId) return;
+
+    if (!this.tabManager.canCreateTab()) {
+      new Notice('Maximum tabs reached. Close a tab first.');
+      return;
+    }
+
+    try {
+      const forked = await this.conversationService.forkConversation(
+        activeTab.state.conversationId,
+        messageId,
+      );
+
+      // 创建新 tab 并切换到 fork 的会话
+      const newTab = this.tabManager.createTab();
+      newTab.setConversation(forked.id);
+
+      new Notice(`Forked: ${forked.title}`);
+      this.render();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      new Notice(`Fork failed: ${msg}`);
+    }
+  }
+
+  /** 复制消息内容到剪贴板 */
+  private async handleCopy(messageId: string): Promise<void> {
+    const activeTab = this.tabManager.getActiveTab();
+    if (!activeTab?.state.conversationId) return;
+
+    const conversation = await this.conversationService.getConversation(
+      activeTab.state.conversationId,
+    );
+    if (!conversation) return;
+
+    const message = conversation.messages.find(m => m.id === messageId);
+    if (!message) return;
+
+    await navigator.clipboard.writeText(message.content);
+    new Notice('Copied to clipboard');
   }
 }
