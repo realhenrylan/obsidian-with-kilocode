@@ -75,6 +75,12 @@ export interface KiloCodeSettings {
   chatViewPlacement: 'left-sidebar' | 'right-sidebar' | 'main-tab';
   locale: string;
   environmentVariables: Record<string, string>;
+  autoStart: boolean;
+  defaultModel: string;
+  temperature: number;
+  autoSave: boolean;
+  theme: 'auto' | 'light' | 'dark';
+  fontSize: number;
 }
 
 /** 视图类型常量 */

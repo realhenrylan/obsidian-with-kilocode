@@ -11,6 +11,12 @@ export const DEFAULT_KILOCODE_SETTINGS: KiloCodeSettings = {
   chatViewPlacement: 'right-sidebar',
   locale: 'en',
   environmentVariables: {},
+  autoStart: false,
+  defaultModel: 'claude-sonnet-4-20250514',
+  temperature: 0.7,
+  autoSave: true,
+  theme: 'auto',
+  fontSize: 14,
 };
 
 export function getKiloCodeSettings(settings: Record<string, unknown>): KiloCodeSettings {

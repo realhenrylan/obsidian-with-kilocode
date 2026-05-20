@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **MessageRenderer**: renders messages as HTML with Markdown support, tool call display, and streaming text append
 - **KiloCodeView**: main chat interface integrating all Phase 2 components
 - **Base styles**: `styles.css` with KiloCode branding theme, CSS custom properties for light/dark mode
+- **@mention system**: MentionService for searching vault files/folders, MentionDropdown for rendering grouped results
 
 ### Fixed
 

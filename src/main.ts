@@ -1,12 +1,13 @@
 // src/main.ts
 
-import { App, Plugin, PluginSettingTab } from 'obsidian';
+import { Plugin } from 'obsidian';
 import { VIEW_TYPE_KILOCODE } from './core/types';
 import type { KiloCodeSettings } from './core/types';
 import { KiloCodeView } from './features/chat/KiloCodeView';
 import { DEFAULT_SETTINGS } from './app/settings/defaultSettings';
 import { ProviderRegistry } from './core/providers/ProviderRegistry';
 import { kilocodeProviderRegistration } from './providers/kilocode/registration';
+import { KiloCodeSettingTab } from './features/settings/SettingsTab';
 
 export default class KiloCodePlugin extends Plugin {
   settings: KiloCodeSettings = DEFAULT_SETTINGS;
@@ -75,12 +76,4 @@ export default class KiloCodePlugin extends Plugin {
       workspace.revealLeaf(leaf);
     }
   }
-}
-
-class KiloCodeSettingTab extends PluginSettingTab {
-  constructor(app: App, private plugin: KiloCodePlugin) {
-    super(app, plugin);
-  }
-
-  display() {}
 }
