@@ -10,6 +10,7 @@ import { ConversationService } from './services/ConversationService';
 import { MessageRenderer } from './rendering/MessageRenderer';
 import { InlineEditModal } from '../inline-edit/InlineEditModal';
 import { DiffViewer } from '../inline-edit/DiffViewer';
+import { CLIErrorHandler } from '../../shared/ErrorNotice';
 
 export class KiloCodeView extends ItemView {
   private plugin: KiloCodePlugin;
@@ -214,6 +215,11 @@ export class KiloCodeView extends ItemView {
       this.render();
 
       // TODO: 调用 KiloCode CLI 发送消息
+      // try {
+      //   await this.plugin.kiloCodeRuntime.sendMessage(content);
+      // } catch (error) {
+      //   CLIErrorHandler.handleCLIStartFailed(error.message);
+      // }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       new Notice(`Failed to send message: ${message}`);
