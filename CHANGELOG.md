@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.0] - 2026-05-20
+
+### Added
+
+- **Tab management**: Tab and TabManager classes for managing multiple chat tabs with persistence
+- **StreamController**: streaming response handler with text/tool/error callbacks
+- **InputController**: user input handler bridging UI with ChatRuntime
+- **ConversationService**: session management with Obsidian vault persistence (.kilocode/sessions/)
+- **MessageRenderer**: renders messages as HTML with Markdown support, tool call display, and streaming text append
+- **KiloCodeView**: main chat interface integrating all Phase 2 components
+- **Base styles**: `styles.css` with KiloCode branding theme, CSS custom properties for light/dark mode
+
+### Fixed
+
+- **Tab/TabManager**: ID duplication, deep copy, input validation, silent close failure
+- **StreamController**: non-null assertion risk, input validation, ID collision
+- **InputController**: isStreaming never reset, duplicate state desync, premature callback, encapsulation leak
+- **ConversationService**: path injection risk, concurrency race condition, silent error swallowing
+- **MessageRenderer**: `any` type for app, system role handling
+- **KiloCodeView**: event listener memory leaks, missing error handling, resource cleanup
+
 ## [0.1.0] - 2026-05-20
 
 ### Added
