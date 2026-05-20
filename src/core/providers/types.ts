@@ -1,7 +1,7 @@
 // src/core/providers/types.ts
 
-import type { ProviderId, StreamMessage } from '../types';
-export type { ProviderId, StreamMessage } from '../types';
+import type { ProviderId, StreamMessage, ToolCallInfo } from '../types';
+export type { ProviderId, StreamMessage, ToolCallInfo } from '../types';
 
 /** Provider 能力定义 */
 export interface ProviderCapabilities {
@@ -65,7 +65,7 @@ export type StreamChunkType =
 export interface StreamChunk {
   type: StreamChunkType;
   content?: string;
-  toolCall?: import('../types').ToolCallInfo;
+  toolCall?: ToolCallInfo;
   error?: string;
   approvalRequest?: {
     toolName: string;
