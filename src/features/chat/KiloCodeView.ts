@@ -1,6 +1,6 @@
 // src/features/chat/KiloCodeView.ts
 
-import { ItemView, WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_KILOCODE } from '../../core/types';
 import type KiloCodePlugin from '../../main';
 import { TabManager } from './tabs/TabManager';
@@ -48,7 +48,9 @@ export class KiloCodeView extends ItemView {
   }
 
   async onClose(): Promise<void> {
-    // 清理资源
+    this.streamController.cancel();
+    this.inputController.cancel();
+    this.messageRenderer = null;
   }
 
   /** 渲染视图 */
@@ -87,7 +89,7 @@ export class KiloCodeView extends ItemView {
         cls: `kilo-tab ${tab.id === this.tabManager.getActiveTab()?.id ? 'kilo-tab-active' : ''}`,
       });
       tabEl.createSpan({ text: tab.state.conversationId || 'New' });
-      tabEl.addEventListener('click', () => this.handleTabClick(tab.id));
+      this.registerDomEvent(tabEl, 'click', () => this.handleTabClick(tab.id));
     }
 
     // 新建标签页按钮
@@ -95,7 +97,7 @@ export class KiloCodeView extends ItemView {
       cls: 'kilo-tab-add',
       text: '+',
     });
-    addBtnEl.addEventListener('click', () => this.handleNewTab());
+    this.registerDomEvent(addBtnEl, 'click', () => this.handleNewTab());
   }
 
   /** 渲染工具栏 */
@@ -116,7 +118,7 @@ export class KiloCodeView extends ItemView {
         text: btn.icon,
         title: btn.title,
       });
-      btnEl.addEventListener('click', btn.handler);
+      this.registerDomEvent(btnEl, 'click', btn.handler);
     }
   }
 
@@ -129,7 +131,7 @@ export class KiloCodeView extends ItemView {
       placeholder: 'Type a message... (Enter to send, Shift+Enter for new line)',
     });
 
-    textarea.addEventListener('keydown', (e) => {
+    this.registerDomEvent(textarea, 'keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         this.handleSend(textarea.value);
@@ -147,7 +149,7 @@ export class KiloCodeView extends ItemView {
       cls: 'kilo-btn kilo-btn-primary',
       text: 'Send',
     });
-    sendBtnEl.addEventListener('click', () => {
+    this.registerDomEvent(sendBtnEl, 'click', () => {
       const textarea = container.querySelector('.kilo-input') as HTMLTextAreaElement;
       if (textarea) {
         this.handleSend(textarea.value);
@@ -161,7 +163,7 @@ export class KiloCodeView extends ItemView {
       text: 'Cancel',
     });
     cancelBtnEl.style.display = 'none';
-    cancelBtnEl.addEventListener('click', () => this.handleCancel());
+    this.registerDomEvent(cancelBtnEl, 'click', () => this.handleCancel());
   }
 
   /** 处理标签页点击 */
@@ -185,29 +187,35 @@ export class KiloCodeView extends ItemView {
     const activeTab = this.tabManager.getActiveTab();
     if (!activeTab) return;
 
-    // 创建会话（如果需要）
-    if (!activeTab.state.conversationId) {
-      const conversation = await this.conversationService.createConversation();
-      activeTab.setConversation(conversation.id);
+    try {
+      // 创建会话（如果需要）
+      if (!activeTab.state.conversationId) {
+        const conversation = await this.conversationService.createConversation();
+        activeTab.setConversation(conversation.id);
+      }
+
+      // 添加用户消息
+      const userMessage = {
+        id: `msg-${Date.now()}`,
+        role: 'user' as const,
+        content,
+        timestamp: Date.now(),
+      };
+
+      await this.conversationService.addMessage(
+        activeTab.state.conversationId!,
+        userMessage
+      );
+
+      // 重新渲染
+      this.render();
+
+      // TODO: 调用 KiloCode CLI 发送消息
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice(`Failed to send message: ${message}`);
+      console.error('[KiloCodeView] handleSend error:', error);
     }
-
-    // 添加用户消息
-    const userMessage = {
-      id: `msg-${Date.now()}`,
-      role: 'user' as const,
-      content,
-      timestamp: Date.now(),
-    };
-
-    await this.conversationService.addMessage(
-      activeTab.state.conversationId!,
-      userMessage
-    );
-
-    // 重新渲染
-    this.render();
-
-    // TODO: 调用 KiloCode CLI 发送消息
   }
 
   /** 处理取消 */
