@@ -149,6 +149,134 @@ export class ConversationService {
     await this.saveMetadata(conversation);
   }
 
+  /** 从指定消息处 fork 新会话 */
+  async forkConversation(sourceId: string, fromMessageId: string): Promise<Conversation> {
+    this.validateId(sourceId);
+    const source = this.conversations.get(sourceId);
+    if (!source) {
+      throw new Error(`Source conversation ${sourceId} not found`);
+    }
+
+    // 加载源会话消息（如果未加载）
+    if (source.messages.length === 0) {
+      await this.loadMessages(source);
+    }
+
+    const forkIndex = source.messages.findIndex(m => m.id === fromMessageId);
+    if (forkIndex === -1) {
+      throw new Error(`Message ${fromMessageId} not found in conversation ${sourceId}`);
+    }
+
+    // 深拷贝到 forkIndex（包含）为止的消息，生成新 ID 避免冲突
+    const forkedMessages: Message[] = source.messages.slice(0, forkIndex + 1).map(m => ({
+      ...m,
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    }));
+
+    const newConv = await this.createConversation();
+    newConv.messages = forkedMessages;
+    newConv.messageCount = forkedMessages.length;
+    newConv.title = `Fork: ${source.title}`;
+    newConv.forkedFrom = sourceId;
+    newConv.forkedAtMessageId = fromMessageId;
+
+    // 更新最后一条消息的预览
+    const lastUserMsg = [...forkedMessages].reverse().find(m => m.role === 'user');
+    if (lastUserMsg) {
+      newConv.preview = lastUserMsg.content.substring(0, 50) +
+        (lastUserMsg.content.length > 50 ? '...' : '');
+    }
+
+    await this.saveMetadata(newConv);
+    await this.saveMessages(newConv);
+
+    return newConv;
+  }
+
+  /** 回退到指定消息，返回被丢弃的消息列表 */
+  async rewindToMessage(conversationId: string, messageId: string): Promise<Message[]> {
+    this.validateId(conversationId);
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation ${conversationId} not found`);
+    }
+
+    if (conversation.messages.length === 0) {
+      await this.loadMessages(conversation);
+    }
+
+    const targetIndex = conversation.messages.findIndex(m => m.id === messageId);
+    if (targetIndex === -1) {
+      throw new Error(`Message ${messageId} not found in conversation ${conversationId}`);
+    }
+
+    const removedMessages = conversation.messages.slice(targetIndex + 1);
+    conversation.messages = conversation.messages.slice(0, targetIndex + 1);
+    conversation.messageCount = conversation.messages.length;
+    conversation.updatedAt = Date.now();
+
+    // 更新预览
+    const lastUserMsg = [...conversation.messages].reverse().find(m => m.role === 'user');
+    if (lastUserMsg) {
+      conversation.preview = lastUserMsg.content.substring(0, 50) +
+        (lastUserMsg.content.length > 50 ? '...' : '');
+    }
+
+    await this.saveMetadata(conversation);
+    await this.saveMessages(conversation);
+
+    return removedMessages;
+  }
+
+  /** 压缩会话历史，保留最近 keepRecent 条消息 */
+  async compactConversation(
+    conversationId: string,
+    summary: string,
+    keepRecent: number = 5,
+  ): Promise<void> {
+    this.validateId(conversationId);
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation ${conversationId} not found`);
+    }
+
+    if (conversation.messages.length === 0) {
+      await this.loadMessages(conversation);
+    }
+
+    // 如果消息数不超过 keepRecent + 1，仍然执行压缩（插入摘要 + 保留全部）
+    const recentMessages = conversation.messages.slice(-keepRecent);
+    const compactedMessage: Message = {
+      id: `msg-${Date.now()}-compact`,
+      role: 'system',
+      content: `[Compacted History]\n${summary}`,
+      timestamp: Date.now(),
+    };
+
+    conversation.messages = [compactedMessage, ...recentMessages];
+    conversation.messageCount = conversation.messages.length;
+    conversation.updatedAt = Date.now();
+    conversation.isCompacted = true;
+
+    await this.saveMetadata(conversation);
+    await this.saveMessages(conversation);
+  }
+
+  /** 恢复历史会话，加载完整消息 */
+  async resumeConversation(id: string): Promise<Conversation> {
+    this.validateId(id);
+    const conversation = this.conversations.get(id);
+    if (!conversation) {
+      throw new Error(`Conversation ${id} not found`);
+    }
+
+    if (conversation.messages.length === 0) {
+      await this.loadMessages(conversation);
+    }
+
+    return conversation;
+  }
+
   /** 保存元数据 */
   private async saveMetadata(conversation: Conversation): Promise<void> {
     const adapter = this.app.vault.adapter;
