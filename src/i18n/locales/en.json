@@ -1,0 +1,75 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "close": "Close",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success"
+  },
+  "chat": {
+    "title": "KiloCode",
+    "send": "Send",
+    "cancel": "Cancel",
+    "placeholder": "Type a message... (Enter to send, Shift+Enter for new line)",
+    "newTab": "New Tab",
+    "closeTab": "Close Tab",
+    "noConversation": "No conversation yet",
+    "startConversation": "Start a conversation with KiloCode"
+  },
+  "modes": {
+    "code": "Code",
+    "codeDesc": "Write and edit code",
+    "plan": "Plan",
+    "planDesc": "Plan and discuss without making changes",
+    "ask": "Ask",
+    "askDesc": "Ask questions without code changes"
+  },
+  "commands": {
+    "compact": "/compact",
+    "compactDesc": "Compact conversation history",
+    "clear": "/clear",
+    "clearDesc": "Clear current conversation",
+    "model": "/model",
+    "modelDesc": "Switch AI model",
+    "mode": "/mode",
+    "modeDesc": "Switch mode (plan/code/ask)"
+  },
+  "mention": {
+    "files": "Files",
+    "folders": "Folders",
+    "tags": "Tags",
+    "noResults": "No results found"
+  },
+  "settings": {
+    "title": "KiloCode Settings",
+    "general": "General",
+    "cliPath": "KiloCode CLI Path",
+    "cliPathDesc": "Path to KiloCode CLI executable",
+    "autoStart": "Auto Start",
+    "autoStartDesc": "Automatically start KiloCode CLI when opening a vault",
+    "chat": "Chat",
+    "maxTabs": "Maximum Tabs",
+    "maxTabsDesc": "Maximum number of chat tabs (1-10)",
+    "autoSave": "Auto Save",
+    "autoSaveDesc": "Automatically save conversation history",
+    "model": "Model",
+    "defaultModel": "Default Model",
+    "defaultModelDesc": "Default AI model to use",
+    "temperature": "Temperature",
+    "temperatureDesc": "Model temperature (0-1)",
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "themeDesc": "Color theme for KiloCode",
+    "fontSize": "Font Size",
+    "fontSizeDesc": "Font size for chat messages"
+  },
+  "errors": {
+    "cliNotFound": "KiloCode CLI not found. Please install it with: npm install -g @kilocode/cli",
+    "cliStartFailed": "Failed to start KiloCode CLI: {{error}}",
+    "networkError": "Network error. Please check your connection.",
+    "toolFailed": "Tool \"{{tool}}\" failed: {{error}}"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "common": {
+    "ok": "确定",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "close": "关闭",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功"
+  },
+  "chat": {
+    "title": "KiloCode",
+    "send": "发送",
+    "cancel": "取消",
+    "placeholder": "输入消息... (Enter 发送，Shift+Enter 换行)",
+    "newTab": "新建标签页",
+    "closeTab": "关闭标签页",
+    "noConversation": "暂无对话",
+    "startConversation": "开始与 KiloCode 对话"
+  },
+  "modes": {
+    "code": "代码",
+    "codeDesc": "编写和编辑代码",
+    "plan": "计划",
+    "planDesc": "计划和讨论，不做修改",
+    "ask": "提问",
+    "askDesc": "提问问题，不修改代码"
+  },
+  "commands": {
+    "compact": "/compact",
+    "compactDesc": "压缩对话历史",
+    "clear": "/clear",
+    "clearDesc": "清空当前对话",
+    "model": "/model",
+    "modelDesc": "切换 AI 模型",
+    "mode": "/mode",
+    "modeDesc": "切换模式 (plan/code/ask)"
+  },
+  "mention": {
+    "files": "文件",
+    "folders": "文件夹",
+    "tags": "标签",
+    "noResults": "未找到结果"
+  },
+  "settings": {
+    "title": "KiloCode 设置",
+    "general": "常规",
+    "cliPath": "KiloCode CLI 路径",
+    "cliPathDesc": "KiloCode CLI 可执行文件路径",
+    "autoStart": "自动启动",
+    "autoStartDesc": "打开 Vault 时自动启动 KiloCode CLI",
+    "chat": "聊天",
+    "maxTabs": "最大标签页数",
+    "maxTabsDesc": "聊天标签页最大数量 (1-10)",
+    "autoSave": "自动保存",
+    "autoSaveDesc": "自动保存对话历史",
+    "model": "模型",
+    "defaultModel": "默认模型",
+    "defaultModelDesc": "默认使用的 AI 模型",
+    "temperature": "温度",
+    "temperatureDesc": "模型温度 (0-1)",
+    "appearance": "外观",
+    "theme": "主题",
+    "themeDesc": "KiloCode 颜色主题",
+    "fontSize": "字体大小",
+    "fontSizeDesc": "聊天消息字体大小"
+  },
+  "errors": {
+    "cliNotFound": "未找到 KiloCode CLI。请使用以下命令安装：npm install -g @kilocode/cli",
+    "cliStartFailed": "启动 KiloCode CLI 失败：{{error}}",
+    "networkError": "网络错误，请检查连接。",
+    "toolFailed": "工具 \"{{tool}}\" 失败：{{error}}"
+  }
+}
