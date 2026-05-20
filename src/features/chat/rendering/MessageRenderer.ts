@@ -41,6 +41,7 @@ export class MessageRenderer {
   renderMessage(message: Message): HTMLElement {
     const messageEl = this.container.createDiv({
       cls: `kilo-message kilo-message-${message.role}`,
+      attr: { 'data-message-id': message.id },
     });
 
     // 头部
@@ -53,6 +54,33 @@ export class MessageRenderer {
       cls: 'kilo-message-time',
       text: new Date(message.timestamp).toLocaleTimeString(),
     });
+
+    // 操作按钮（通过 data-action 委托，由 KiloCodeView 处理事件）
+    const actionsEl = messageEl.createDiv({ cls: 'kilo-message-actions' });
+
+    const rewindBtn = actionsEl.createEl('button', {
+      cls: 'kilo-action-btn',
+      text: '⏪',
+      title: 'Rewind to here',
+    });
+    (rewindBtn as HTMLElement).dataset.action = 'rewind';
+    (rewindBtn as HTMLElement).dataset.messageId = message.id;
+
+    const forkBtn = actionsEl.createEl('button', {
+      cls: 'kilo-action-btn',
+      text: '🍴',
+      title: 'Fork from here',
+    });
+    (forkBtn as HTMLElement).dataset.action = 'fork';
+    (forkBtn as HTMLElement).dataset.messageId = message.id;
+
+    const copyBtn = actionsEl.createEl('button', {
+      cls: 'kilo-action-btn',
+      text: '📋',
+      title: 'Copy',
+    });
+    (copyBtn as HTMLElement).dataset.action = 'copy';
+    (copyBtn as HTMLElement).dataset.messageId = message.id;
 
     // 内容
     const contentEl = messageEl.createDiv({ cls: 'kilo-message-content' });
