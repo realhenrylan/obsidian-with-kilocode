@@ -28,7 +28,7 @@ export class StreamController {
   startStream(): void {
     this.isStreaming = true;
     this.currentMessage = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
@@ -38,15 +38,28 @@ export class StreamController {
 
   /** 处理流式消息 */
   handleMessage(message: StreamMessage): void {
+    if (!message || typeof message.type !== 'string') {
+      this.handleError('Invalid message: missing or invalid type');
+      return;
+    }
+
     switch (message.type) {
       case 'text':
         this.handleTextMessage(message.content || '');
         break;
       case 'tool_use':
-        this.handleToolUse(message.toolCall!);
+        if (!message.toolCall) {
+          this.handleError('Invalid tool_use message: missing toolCall');
+          return;
+        }
+        this.handleToolUse(message.toolCall);
         break;
       case 'tool_result':
-        this.handleToolResult(message.toolCall!);
+        if (!message.toolCall) {
+          this.handleError('Invalid tool_result message: missing toolCall');
+          return;
+        }
+        this.handleToolResult(message.toolCall);
         break;
       case 'error':
         this.handleError(message.error || 'Unknown error');
