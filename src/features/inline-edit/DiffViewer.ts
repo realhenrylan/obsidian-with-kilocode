@@ -75,10 +75,11 @@ export class DiffViewer {
   private onAccept(): void {
     this.container.dispatchEvent(new CustomEvent('diff-accepted', {
       detail: { newText: this.newText },
+      bubbles: true,
     }));
   }
 
   private onReject(): void {
-    this.container.dispatchEvent(new CustomEvent('diff-rejected'));
+    this.container.dispatchEvent(new CustomEvent('diff-rejected', { bubbles: true }));
   }
 }
