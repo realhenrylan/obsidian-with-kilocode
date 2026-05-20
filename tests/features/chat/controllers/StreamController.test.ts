@@ -136,4 +136,61 @@ describe('StreamController', () => {
       expect(onText).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('consumeStream — approval_required', () => {
+    test('approval_required chunk 不中断流、不改变消息内容', async () => {
+      const onText = jest.fn();
+
+      const generator = mockGenerator([
+        { type: 'text', content: 'Before approval.\n' },
+        {
+          type: 'approval_required',
+          approvalRequest: {
+            toolName: 'write_file',
+            input: { path: '/test', content: 'data' },
+            description: 'Write to /test',
+          },
+        },
+        { type: 'text', content: 'After approval.\n' },
+        { type: 'done' },
+      ]);
+
+      const message = await controller.consumeStream(generator, { onText });
+
+      // approval_required 被跳过，不影响文本累积
+      expect(message.content).toBe('Before approval.\nAfter approval.\n');
+      expect(onText).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('consumeStream — generator 抛异常', () => {
+    test('generator 抛出错误时调用 onError', async () => {
+      const onError = jest.fn();
+
+      async function* throwingGenerator(): AsyncGenerator<StreamChunk> {
+        yield { type: 'text', content: 'Before error.\n' };
+        throw new Error('Generator exploded');
+      }
+
+      const message = await controller.consumeStream(throwingGenerator(), { onError });
+
+      expect(onError).toHaveBeenCalledWith('Generator exploded');
+      // 错误前累积的内容仍然保留
+      expect(message.content).toBe('Before error.\n');
+    });
+
+    test('generator 抛非 Error 对象时调用 onError', async () => {
+      const onError = jest.fn();
+
+      async function* throwingGenerator(): AsyncGenerator<StreamChunk> {
+        yield { type: 'text', content: 'Start.\n' };
+        throw 'string error'; // eslint-disable-line no-throw-literal
+      }
+
+      const message = await controller.consumeStream(throwingGenerator(), { onError });
+
+      expect(onError).toHaveBeenCalledWith('string error');
+      expect(message.content).toBe('Start.\n');
+    });
+  });
 });
