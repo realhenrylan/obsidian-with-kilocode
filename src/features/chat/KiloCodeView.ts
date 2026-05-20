@@ -11,6 +11,7 @@ import { MessageRenderer } from './rendering/MessageRenderer';
 import { InlineEditModal } from '../inline-edit/InlineEditModal';
 import { DiffViewer } from '../inline-edit/DiffViewer';
 import { CLIErrorHandler } from '../../shared/ErrorNotice';
+import { PlanModeController } from './PlanModeController';
 
 export class KiloCodeView extends ItemView {
   private plugin: KiloCodePlugin;
@@ -19,6 +20,7 @@ export class KiloCodeView extends ItemView {
   private inputController: InputController;
   private conversationService: ConversationService;
   private messageRenderer: MessageRenderer | null = null;
+  private planModeController: PlanModeController;
 
   constructor(leaf: WorkspaceLeaf, plugin: KiloCodePlugin) {
     super(leaf);
@@ -31,6 +33,7 @@ export class KiloCodeView extends ItemView {
       plugin.app,
       plugin.app.vault.getRoot().path
     );
+    this.planModeController = new PlanModeController();
   }
 
   getViewType(): string {
@@ -48,6 +51,15 @@ export class KiloCodeView extends ItemView {
   async onOpen(): Promise<void> {
     await this.conversationService.initialize();
     this.registerInlineEditCommand();
+    this.plugin.addCommand({
+      id: 'toggle-plan-mode',
+      name: 'Toggle Plan Mode',
+      callback: () => {
+        this.planModeController.cycleMode();
+        this.render();
+      },
+      hotkeys: [{ modifiers: ['Shift'], key: 'Tab' }],
+    });
     this.render();
   }
 
@@ -62,6 +74,9 @@ export class KiloCodeView extends ItemView {
     const container = this.containerEl.children[1] as HTMLElement;
     container.empty();
     container.addClass('kilo-code-view');
+
+    // 模式切换
+    this.renderModeToggle(container);
 
     // 标签栏
     this.renderTabBar(container);
@@ -78,6 +93,24 @@ export class KiloCodeView extends ItemView {
 
     // 操作栏
     this.renderActionBar(container);
+  }
+
+  /** 渲染模式切换 */
+  private renderModeToggle(container: HTMLElement): void {
+    const modeToggleEl = container.createDiv({ cls: 'kilo-mode-toggle' });
+    const currentMode = this.planModeController.getCurrentModeConfig();
+    const modeBtn = modeToggleEl.createEl('button', {
+      cls: 'kilo-mode-btn',
+      text: `${currentMode.icon} ${currentMode.name}`,
+    });
+    this.registerDomEvent(modeBtn, 'click', () => {
+      this.planModeController.cycleMode();
+      this.render();
+    });
+    modeBtn.createSpan({
+      cls: 'kilo-mode-hint',
+      text: ' (Shift+Tab)',
+    });
   }
 
   /** 渲染标签栏 */
@@ -199,10 +232,11 @@ export class KiloCodeView extends ItemView {
       }
 
       // 添加用户消息
+      const messageWithPrefix = this.planModeController.getMessageWithPrefix(content);
       const userMessage = {
         id: `msg-${Date.now()}`,
         role: 'user' as const,
-        content,
+        content: messageWithPrefix,
         timestamp: Date.now(),
       };
 
