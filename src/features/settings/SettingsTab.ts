@@ -125,5 +125,21 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           this.plugin.settings.fontSize = value;
           await this.plugin.saveSettings();
         }));
+
+    // === 安全设置 ===
+    containerEl.createEl('h3', { text: 'Security' });
+
+    new Setting(containerEl)
+      .setName('Permission Mode')
+      .setDesc('Control how AI tool calls are approved')
+      .addDropdown(dropdown => dropdown
+        .addOption('normal', 'Normal — approve write operations')
+        .addOption('yolo', 'Yolo — auto-approve all operations')
+        .addOption('plan', 'Plan — read-only, deny all writes')
+        .setValue(this.plugin.settings.permissionMode)
+        .onChange(async (value: string) => {
+          this.plugin.settings.permissionMode = value as 'yolo' | 'normal' | 'plan';
+          await this.plugin.saveSettings();
+        }));
   }
 }
