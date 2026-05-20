@@ -276,3 +276,143 @@
 .kilo-btn-cancel:hover {
   opacity: 0.9;
 }
+
+/* === 输入工具栏 === */
+.kilo-input-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--kilo-border);
+}
+
+.kilo-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.15s;
+}
+
+.kilo-toolbar-btn:hover {
+  background-color: var(--kilo-primary-light);
+}
+
+.kilo-toolbar-btn-active {
+  background-color: var(--kilo-primary);
+  color: #000;
+}
+
+/* === 图片预览 === */
+.kilo-image-preview {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  flex-wrap: wrap;
+}
+
+.kilo-image-item {
+  position: relative;
+  border: 1px solid var(--kilo-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.kilo-image-item img {
+  display: block;
+  object-fit: cover;
+}
+
+.kilo-image-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  padding: 0;
+}
+
+/* === 审批对话框 === */
+.kilo-approval-modal h3 {
+  margin-bottom: 8px;
+}
+
+.kilo-approval-description {
+  margin-bottom: 12px;
+  color: var(--kilo-text-secondary);
+}
+
+.kilo-approval-input {
+  background: var(--kilo-bg-secondary);
+  border: 1px solid var(--kilo-border);
+  border-radius: 4px;
+  padding: 12px;
+  max-height: 200px;
+  overflow: auto;
+  font-size: 12px;
+  font-family: var(--font-monospace);
+}
+
+.kilo-approval-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  justify-content: flex-end;
+}
+
+.kilo-btn-danger {
+  background-color: var(--kilo-error);
+  color: #fff;
+}
+
+.kilo-btn-secondary {
+  background-color: var(--kilo-bg-secondary);
+  color: var(--kilo-text);
+}
+
+/* === 消息操作按钮 === */
+.kilo-message {
+  position: relative;
+}
+
+.kilo-message-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.kilo-message:hover .kilo-message-actions {
+  opacity: 1;
+}
+
+.kilo-action-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kilo-action-btn:hover {
+  background-color: var(--kilo-primary-light);
+}
