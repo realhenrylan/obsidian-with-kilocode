@@ -51,3 +51,25 @@ export interface ProviderRegistration {
   capabilities: ProviderCapabilities;
   createRuntime: () => ChatRuntime;
 }
+
+/** 流式响应块类型 */
+export type StreamChunkType =
+  | 'text'
+  | 'tool_use'
+  | 'tool_result'
+  | 'error'
+  | 'done'
+  | 'approval_required';
+
+/** 流式响应块 */
+export interface StreamChunk {
+  type: StreamChunkType;
+  content?: string;
+  toolCall?: import('../types').ToolCallInfo;
+  error?: string;
+  approvalRequest?: {
+    toolName: string;
+    input: Record<string, unknown>;
+    description: string;
+  };
+}

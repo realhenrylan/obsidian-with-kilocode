@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **i18n**: Internationalization system with English and Chinese translations, dot-notation keys, parameter substitution
 - **Virtual scrolling**: VirtualScroller for performance optimization with large message lists (>50 messages)
 - **Unit tests**: 18 tests covering PlanModeController, MCPManager, i18n modules
+- **StreamChunk types**: StreamChunkType and StreamChunk interface for async streaming (Phase A preparation)
 - **Unit tests**: 55 new tests covering TabManager, StreamController, InputController, ProviderRegistry, CommandRegistry
 - **Integration tests**: 5 tests covering chat workflow (TabManager, StreamController, InputController, PlanModeController)
 - **Jest configuration**: jest.config.js with ts-jest, Obsidian API mock
