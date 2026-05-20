@@ -13,6 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **i18n**: Internationalization system with English and Chinese translations, dot-notation keys, parameter substitution
 - **Virtual scrolling**: VirtualScroller for performance optimization with large message lists (>50 messages)
 - **Unit tests**: 18 tests covering PlanModeController, MCPManager, i18n modules
+- **KiloCodeChatRuntime**: Rewrote to implement AsyncGenerator-based ChatRuntime interface; internal queue mechanism (pendingChunks + resolveNext) bridges stdout data events to generator consumption; `done` and `error` chunks treated as terminal; partial line buffering preserved
+- **Jest configuration**: Added tsconfig.test.json with ES2018 target for async generator support in tests
+- **Unit tests**: 7 new tests covering KiloCodeChatRuntime AsyncGenerator behavior (text/tool_use/error chunks, partial lines, cancel, sendApproval)
 - **StreamChunk types**: StreamChunkType and StreamChunk interface for async streaming (Phase A preparation)
 - **Unit tests**: 55 new tests covering TabManager, StreamController, InputController, ProviderRegistry, CommandRegistry
 
