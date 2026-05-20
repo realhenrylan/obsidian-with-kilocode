@@ -18,6 +18,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **ConversationService**: path injection risk — added id format validation (`conv-{timestamp}-{random}`)
+- **ConversationService**: concurrency race condition in addMessage — added Promise queue for sequential execution
+- **ConversationService**: silent error swallowing in loadAllMetadata/loadMessages — added console.warn logging
+- **InputController**: isStreaming never reset on successful send — now auto-resets via runtime onComplete/onError callbacks
+- **InputController**: duplicate isStreaming state desync — removed standalone flag, wired to runtime callbacks
+- **InputController**: onSend callback fired before message actually sent — moved after successful send
+- **InputController**: setStreaming exposed internal state — removed public method
+- **InputController**: setCallbacks replaced instead of merged — now uses spread merge pattern
 - Moved @codemirror packages from dependencies to devDependencies (externalized by esbuild)
 - Removed importHelpers from tsconfig (not needed with esbuild)
 - Added esModuleInterop and forceConsistentCasingInFileNames to tsconfig
