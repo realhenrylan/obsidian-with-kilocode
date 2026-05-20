@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Unit tests**: 13 new tests covering ConversationService fork/rewind/compact/resume methods
 - **Unit tests**: 3 new tests covering MessageRenderer action button rendering
 - **Integration tests**: 4 end-to-end tests covering full conversation management workflows (fork→rewind, compact→continue, resume, fork→compact isolation)
+- **Unit tests**: 34 supplementary tests covering ConversationService CRUD (create/get/add/delete/list/rename), fork/rewind/compact edge cases, ID validation
+- **Unit tests**: 3 new StreamController tests covering approval_required chunk passthrough and generator error handling
 
 ## [0.4.0] - 2026-05-20
 
