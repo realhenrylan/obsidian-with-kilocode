@@ -1,7 +1,8 @@
 // src/features/chat/KiloCodeView.ts
 
-import { ItemView, Notice, WorkspaceLeaf } from 'obsidian';
+import { ItemView, MarkdownView, Notice, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_KILOCODE } from '../../core/types';
+import type { ToolCallInfo } from '../../core/types';
 import type KiloCodePlugin from '../../main';
 import { TabManager } from './tabs/TabManager';
 import { StreamController } from './controllers/StreamController';
@@ -12,6 +13,8 @@ import { InlineEditModal } from '../inline-edit/InlineEditModal';
 import { DiffViewer } from '../inline-edit/DiffViewer';
 import { CLIErrorHandler } from '../../shared/ErrorNotice';
 import { PlanModeController } from './PlanModeController';
+import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
+import type { ChatRuntime } from '../../core/providers/types';
 
 export class KiloCodeView extends ItemView {
   private plugin: KiloCodePlugin;
@@ -217,21 +220,92 @@ export class KiloCodeView extends ItemView {
     }
   }
 
+  /** 获取或启动 ChatRuntime */
+  private getOrCreateRuntime(): ChatRuntime | null {
+    const runtime = this.inputController.getRuntime();
+    if (runtime) return runtime;
+
+    const registration = ProviderRegistry.get('kilocode');
+    if (!registration) return null;
+
+    const newRuntime = registration.createRuntime();
+    this.inputController.setRuntime(newRuntime);
+
+    newRuntime.start().catch(err => {
+      console.error('[KiloCodeView] Failed to start runtime:', err);
+    });
+
+    return newRuntime;
+  }
+
+  /** 获取当前活跃笔记路径 */
+  private getCurrentNotePath(): string | undefined {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    return activeView?.file?.path;
+  }
+
+  /** 增量追加文本到最后一条消息 */
+  private appendToLastMessage(text: string): void {
+    const container = this.containerEl.querySelector('.kilo-messages');
+    if (!container) return;
+
+    let lastContent = container.querySelector('.kilo-message:last-child .kilo-message-content');
+    if (!lastContent) {
+      const messageEl = container.createDiv({ cls: 'kilo-message kilo-message-assistant' });
+      const headerEl = messageEl.createDiv({ cls: 'kilo-message-header' });
+      headerEl.createSpan({ cls: 'kilo-message-role', text: 'KiloCode' });
+      headerEl.createSpan({ cls: 'kilo-message-time', text: new Date().toLocaleTimeString() });
+      lastContent = messageEl.createDiv({ cls: 'kilo-message-content' });
+    }
+
+    lastContent.createSpan({ text });
+    container.scrollTop = container.scrollHeight;
+  }
+
+  /** 渲染工具调用卡片 */
+  private renderToolCall(toolCall: ToolCallInfo): void {
+    const container = this.containerEl.querySelector('.kilo-messages');
+    if (!container) return;
+
+    const lastMessage = container.querySelector('.kilo-message:last-child');
+    if (!lastMessage) return;
+
+    let toolsEl = lastMessage.querySelector('.kilo-tools') as HTMLElement;
+    if (!toolsEl) {
+      toolsEl = lastMessage.createDiv({ cls: 'kilo-tools' });
+    }
+
+    const toolEl = toolsEl.createDiv({ cls: `kilo-tool kilo-tool-${toolCall.status}` });
+    toolEl.setAttribute('data-tool-id', toolCall.id);
+    const headerEl = toolEl.createDiv({ cls: 'kilo-tool-header' });
+    headerEl.createSpan({ cls: 'kilo-tool-name', text: toolCall.name });
+    headerEl.createSpan({ cls: 'kilo-tool-status', text: '🔄 Running' });
+  }
+
+  /** 更新工具调用结果 */
+  private updateToolCallResult(toolCallId: string, result: string): void {
+    const toolEl = this.containerEl.querySelector(`[data-tool-id="${toolCallId}"]`);
+    if (toolEl) {
+      const statusEl = toolEl.querySelector('.kilo-tool-status');
+      if (statusEl) statusEl.textContent = '✅ Done';
+    }
+  }
+
   /** 处理发送消息 */
   private async handleSend(content: string): Promise<void> {
     if (!content.trim()) return;
 
     const activeTab = this.tabManager.getActiveTab();
-    if (!activeTab) return;
+    if (!activeTab || activeTab.state.isStreaming) return;
 
     try {
-      // 创建会话（如果需要）
+      // 1. 确保会话存在
       if (!activeTab.state.conversationId) {
         const conversation = await this.conversationService.createConversation();
         activeTab.setConversation(conversation.id);
       }
 
-      // 添加用户消息
+      // 2. 保存用户消息
       const messageWithPrefix = this.planModeController.getMessageWithPrefix(content);
       const userMessage = {
         id: `msg-${Date.now()}`,
@@ -239,25 +313,50 @@ export class KiloCodeView extends ItemView {
         content: messageWithPrefix,
         timestamp: Date.now(),
       };
-
       await this.conversationService.addMessage(
         activeTab.state.conversationId!,
-        userMessage
+        userMessage,
       );
 
-      // 重新渲染
+      // 3. 获取 runtime 并发送
+      const runtime = this.getOrCreateRuntime();
+      if (!runtime) {
+        new Notice('KiloCode CLI not available');
+        return;
+      }
+
+      const generator = runtime.sendMessage(content, {
+        vaultPath: this.plugin.app.vault.getRoot().path,
+        currentNote: this.getCurrentNotePath(),
+      });
+
+      // 4. 消费流式响应
+      activeTab.setStreaming(true);
       this.render();
 
-      // TODO: 调用 KiloCode CLI 发送消息
-      // try {
-      //   await this.plugin.kiloCodeRuntime.sendMessage(content);
-      // } catch (error) {
-      //   CLIErrorHandler.handleCLIStartFailed(error.message);
-      // }
+      const assistantMessage = await this.streamController.consumeStream(generator, {
+        onText: (text) => this.appendToLastMessage(text),
+        onToolCall: (toolCall) => this.renderToolCall(toolCall),
+        onToolResult: (id, result) => this.updateToolCallResult(id, result),
+        onError: (error) => new Notice(`Error: ${error}`),
+        onComplete: () => {
+          activeTab.setStreaming(false);
+        },
+      });
+
+      // 5. 保存助手消息
+      await this.conversationService.addMessage(
+        activeTab.state.conversationId!,
+        assistantMessage,
+      );
+
+      this.render();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       new Notice(`Failed to send message: ${message}`);
       console.error('[KiloCodeView] handleSend error:', error);
+      this.tabManager.getActiveTab()?.setStreaming(false);
+      this.render();
     }
   }
 
@@ -279,9 +378,7 @@ export class KiloCodeView extends ItemView {
   /** 显示 Inline Edit 模态框 */
   private showInlineEditModal(selectedText: string, editor: any): void {
     new InlineEditModal(this.app, selectedText, async (instruction) => {
-      // TODO: 调用 KiloCode CLI 进行编辑
-      // const editedText = await this.plugin.kiloCodeRuntime.inlineEdit(selectedText, instruction);
-      // this.showDiffPreview(editor, selectedText, editedText);
+      // TODO: 调用 KiloCode CLI 进行 inline edit（Phase B 实现）
     }).open();
   }
 
