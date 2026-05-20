@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.0] - 2026-05-20
+
+### Added
+
+- **Conversation forking**: `forkConversation` creates a new conversation from a specified message, copying messages with new IDs to avoid conflicts
+- **Conversation rewinding**: `rewindToMessage` discards all messages after a specified point, returns removed messages
+- **Conversation compaction**: `compactConversation` replaces old messages with a system summary, keeping the N most recent messages
+- **Conversation resumption**: `resumeConversation` loads full message history from storage for a previously loaded conversation
+- **Conversation type extensions**: `Conversation` interface adds `forkedFrom`, `forkedAtMessageId`, `isCompacted` fields
+- **TabState extensions**: `TabState` interface adds `isForked`, `forkSourceId`, `scrollPosition` fields
+- **Settings extension**: `KiloCodeSettings` adds `compactKeepRecent` field (default: 5)
+- **Message action buttons**: MessageRenderer renders rewind (⏪), fork (🍴), copy (📋) buttons per message with `data-action` event delegation
+- **Message action handlers**: KiloCodeView implements `handleRewind`, `handleFork`, `handleCopy` with confirmation dialogs and Notices
+- **Unit tests**: 13 new tests covering ConversationService fork/rewind/compact/resume methods
+- **Unit tests**: 3 new tests covering MessageRenderer action button rendering
+- **Integration tests**: 4 end-to-end tests covering full conversation management workflows (fork→rewind, compact→continue, resume, fork→compact isolation)
+
 ## [0.4.0] - 2026-05-20
 
 ### Added
