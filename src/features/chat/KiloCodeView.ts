@@ -17,6 +17,9 @@ import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import type { ChatRuntime } from '../../core/providers/types';
 import { ApprovalManager } from '../../core/security/ApprovalManager';
 import { showApprovalModal } from '../../core/security/ApprovalModal';
+import { CurrentNoteContext } from './ui/CurrentNoteContext';
+import { ImageContext } from './ui/ImageContext';
+import { InputToolbar } from './ui/InputToolbar';
 
 export class KiloCodeView extends ItemView {
   private plugin: KiloCodePlugin;
@@ -27,6 +30,8 @@ export class KiloCodeView extends ItemView {
   private messageRenderer: MessageRenderer | null = null;
   private planModeController: PlanModeController;
   private approvalManager: ApprovalManager;
+  private currentNoteContext: CurrentNoteContext;
+  private imageContext: ImageContext;
 
   constructor(leaf: WorkspaceLeaf, plugin: KiloCodePlugin) {
     super(leaf);
@@ -41,6 +46,8 @@ export class KiloCodeView extends ItemView {
     );
     this.planModeController = new PlanModeController();
     this.approvalManager = new ApprovalManager();
+    this.currentNoteContext = new CurrentNoteContext(plugin.app);
+    this.imageContext = new ImageContext(5); // 5MB limit
 
     // 设置审批处理器（弹出 Modal）
     this.approvalManager.setApprovalHandler(async (request) => {
@@ -155,35 +162,82 @@ export class KiloCodeView extends ItemView {
 
   /** 渲染工具栏 */
   private renderToolbar(container: HTMLElement): void {
-    const toolbarEl = container.createDiv({ cls: 'kilo-toolbar' });
+    const toolbarContainer = container.createDiv({ cls: 'kilo-toolbar-container' });
 
-    const buttons = [
-      { icon: '@', title: 'Mention', handler: () => {} },
-      { icon: '/', title: 'Commands', handler: () => {} },
-      { icon: '#', title: 'Instructions', handler: () => {} },
-      { icon: '📎', title: 'Attach file', handler: () => {} },
-      { icon: '🖼️', title: 'Attach image', handler: () => {} },
-    ];
-
-    for (const btn of buttons) {
-      const btnEl = toolbarEl.createDiv({
-        cls: 'kilo-toolbar-btn',
-        text: btn.icon,
-        title: btn.title,
-      });
-      this.registerDomEvent(btnEl, 'click', btn.handler);
-    }
+    const inputToolbar = new InputToolbar(toolbarContainer);
+    inputToolbar.setActions([
+      {
+        id: 'mention',
+        icon: '@',
+        label: 'Mention file, MCP server, or subagent',
+        handler: () => this.triggerMention(),
+      },
+      {
+        id: 'command',
+        icon: '/',
+        label: 'Slash command',
+        handler: () => this.triggerSlashCommand(),
+      },
+      {
+        id: 'instruction',
+        icon: '#',
+        label: 'Add custom instruction',
+        handler: () => this.triggerInstructionMode(),
+      },
+      {
+        id: 'attach-file',
+        icon: '📎',
+        label: 'Attach vault file',
+        handler: () => this.attachFile(),
+      },
+      {
+        id: 'attach-image',
+        icon: '🖼️',
+        label: 'Attach image',
+        handler: () => this.handleAttachImage(),
+      },
+      {
+        id: 'current-note',
+        icon: '📝',
+        label: 'Include current note as context',
+        active: this.currentNoteContext.isIncluded(),
+        handler: () => this.handleToggleCurrentNote(),
+      },
+    ]);
+    inputToolbar.render();
   }
 
   /** 渲染输入框 */
   private renderInput(container: HTMLElement): void {
     const inputEl = container.createDiv({ cls: 'kilo-input-container' });
 
+    // 图片预览区域
+    this.imageContext.renderPreview(inputEl);
+
     const textarea = inputEl.createEl('textarea', {
       cls: 'kilo-input',
       placeholder: 'Type a message... (Enter to send, Shift+Enter for new line)',
     });
 
+    // 粘贴事件
+    this.registerDomEvent(textarea, 'paste', (e) => {
+      if (this.imageContext.addFromPaste(e)) {
+        this.imageContext.renderPreview(inputEl);
+      }
+    });
+
+    // 拖拽事件
+    this.registerDomEvent(textarea, 'dragover', (e) => {
+      e.preventDefault();
+    });
+    this.registerDomEvent(textarea, 'drop', (e) => {
+      e.preventDefault();
+      if (this.imageContext.addFromDrop(e)) {
+        this.imageContext.renderPreview(inputEl);
+      }
+    });
+
+    // 键盘事件
     this.registerDomEvent(textarea, 'keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -320,11 +374,25 @@ export class KiloCodeView extends ItemView {
 
       // 2. 保存用户消息
       const messageWithPrefix = this.planModeController.getMessageWithPrefix(content);
+
+      // 获取图片
+      const images = this.imageContext.getImages();
+
+      // 获取当前笔记内容
+      let currentNote: string | undefined;
+      if (this.currentNoteContext.isIncluded()) {
+        const noteContent = await this.currentNoteContext.getNoteContent();
+        if (noteContent) {
+          currentNote = noteContent;
+        }
+      }
+
       const userMessage = {
         id: `msg-${Date.now()}`,
         role: 'user' as const,
         content: messageWithPrefix,
         timestamp: Date.now(),
+        images: images.length > 0 ? images : undefined,
       };
       await this.conversationService.addMessage(
         activeTab.state.conversationId!,
@@ -343,7 +411,7 @@ export class KiloCodeView extends ItemView {
 
       const generator = runtime.sendMessage(content, {
         vaultPath: this.plugin.app.vault.getRoot().path,
-        currentNote: this.getCurrentNotePath(),
+        currentNote: currentNote || this.getCurrentNotePath(),
       });
 
       // 4. 消费流式响应
@@ -374,6 +442,9 @@ export class KiloCodeView extends ItemView {
         activeTab.state.conversationId!,
         assistantMessage,
       );
+
+      // 清除图片
+      this.imageContext.clearImages();
 
       this.render();
     } catch (error) {
@@ -429,6 +500,47 @@ export class KiloCodeView extends ItemView {
   private handleCancel(): void {
     this.inputController.cancel();
     this.streamController.cancel();
+  }
+
+  /** 处理图片附件 */
+  private async handleAttachImage(): Promise<void> {
+    await this.imageContext.addFromFile();
+    // 刷新图片预览
+    const inputContainer = this.containerEl.querySelector('.kilo-input-container');
+    if (inputContainer) {
+      this.imageContext.renderPreview(inputContainer as HTMLElement);
+    }
+  }
+
+  /** 处理当前笔记切换 */
+  private handleToggleCurrentNote(): void {
+    this.currentNoteContext.toggle();
+    // 刷新工具栏按钮状态
+    this.render();
+  }
+
+  /** 触发 mention */
+  private triggerMention(): void {
+    // TODO: 实现 mention 下拉菜单
+    new Notice('Mention feature coming soon');
+  }
+
+  /** 触发斜杠命令 */
+  private triggerSlashCommand(): void {
+    // TODO: 实现斜杠命令面板
+    new Notice('Slash commands coming soon');
+  }
+
+  /** 触发指令模式 */
+  private triggerInstructionMode(): void {
+    // TODO: 实现指令模式
+    new Notice('Instruction mode coming soon');
+  }
+
+  /** 附加文件 */
+  private attachFile(): void {
+    // TODO: 实现文件附加
+    new Notice('File attachment coming soon');
   }
 
   /** 注册消息操作事件委托（事件冒泡捕获 rewind/fork/copy 按钮点击） */
