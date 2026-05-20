@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **StreamController**: streaming response handler with text/tool/error callbacks
 - **MessageRenderer**: renders messages as HTML with Markdown support, tool call display, and streaming text append
 - **Build verification**: TypeScript type checking and esbuild production build both pass
+- **Base styles**: `styles.css` with KiloCode branding theme, CSS custom properties for light/dark mode, styles for chat UI components (messages, tools, tabs, input, buttons)
 
 ### Fixed
 
