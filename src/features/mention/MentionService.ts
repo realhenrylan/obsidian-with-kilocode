@@ -1,12 +1,13 @@
 import { App, TFile } from 'obsidian';
 
-export type MentionType = 'file' | 'folder' | 'tag';
+export type MentionType = 'file' | 'folder' | 'tag' | 'mcp-server' | 'subagent';
 
 export interface MentionItem {
   type: MentionType;
   name: string;
   path: string;
   icon: string;
+  description?: string;
 }
 
 /**
@@ -21,7 +22,10 @@ export class MentionService {
   }
 
   /** 搜索可提及的内容 */
-  async search(query: string): Promise<MentionItem[]> {
+  async search(query: string, context?: {
+    mcpServers?: Array<{ id: string; name: string; description?: string }>;
+    subagents?: Array<{ id: string; name: string; description?: string }>;
+  }): Promise<MentionItem[]> {
     const results: MentionItem[] = [];
 
     // 搜索文件
@@ -47,6 +51,36 @@ export class MentionService {
           path: folder.path,
           icon: '📁',
         });
+      }
+    }
+
+    // 搜索 MCP 服务器
+    if (context?.mcpServers) {
+      for (const server of context.mcpServers) {
+        if (server.name.toLowerCase().includes(query.toLowerCase())) {
+          results.push({
+            type: 'mcp-server',
+            name: server.name,
+            path: server.id,
+            icon: '🔌',
+            description: server.description,
+          });
+        }
+      }
+    }
+
+    // 搜索子代理
+    if (context?.subagents) {
+      for (const agent of context.subagents) {
+        if (agent.name.toLowerCase().includes(query.toLowerCase())) {
+          results.push({
+            type: 'subagent',
+            name: agent.name,
+            path: agent.id,
+            icon: '🤖',
+            description: agent.description,
+          });
+        }
       }
     }
 

@@ -77,6 +77,8 @@ export class MentionDropdown {
       file: 'Files',
       folder: 'Folders',
       tag: 'Tags',
+      'mcp-server': 'MCP Servers',
+      subagent: 'Subagents',
     };
     return labels[type] || type;
   }
