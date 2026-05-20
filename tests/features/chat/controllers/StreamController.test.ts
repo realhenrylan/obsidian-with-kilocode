@@ -157,9 +157,107 @@ describe('StreamController', () => {
 
       const message = await controller.consumeStream(generator, { onText });
 
-      // approval_required 被跳过，不影响文本累积
       expect(message.content).toBe('Before approval.\nAfter approval.\n');
       expect(onText).toHaveBeenCalledTimes(2);
+    });
+
+    test('onApprovalRequired 回调被调用并传入正确参数', async () => {
+      const onApprovalRequired = jest.fn().mockResolvedValue('allow');
+
+      const generator = mockGenerator([
+        {
+          type: 'approval_required',
+          approvalRequest: {
+            toolName: 'bash',
+            input: { command: 'rm -rf /tmp/test' },
+            description: 'Execute bash command',
+          },
+        },
+        { type: 'done' },
+      ]);
+
+      await controller.consumeStream(generator, { onApprovalRequired });
+
+      expect(onApprovalRequired).toHaveBeenCalledTimes(1);
+      expect(onApprovalRequired).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolName: 'bash',
+          input: { command: 'rm -rf /tmp/test' },
+          description: 'Execute bash command',
+        }),
+      );
+    });
+
+    test('cancel 决定中断流', async () => {
+      const onText = jest.fn();
+      const onApprovalRequired = jest.fn().mockResolvedValue('cancel');
+
+      async function* generatorWithApproval(): AsyncGenerator<StreamChunk> {
+        yield { type: 'text', content: 'Before.\n' };
+        yield {
+          type: 'approval_required',
+          approvalRequest: {
+            toolName: 'write_file',
+            input: { path: '/test' },
+            description: 'Write file',
+          },
+        };
+        yield { type: 'text', content: 'After.\n' };
+        yield { type: 'done' };
+      }
+
+      const message = await controller.consumeStream(generatorWithApproval(), {
+        onText,
+        onApprovalRequired,
+      });
+
+      expect(onApprovalRequired).toHaveBeenCalledTimes(1);
+      expect(message.content).toBe('Before.\n');
+    });
+
+    test('setApprovalDecisionCallback 被调用', async () => {
+      const decisionCallback = jest.fn();
+      controller.setApprovalDecisionCallback(decisionCallback);
+
+      const onApprovalRequired = jest.fn().mockResolvedValue('allow');
+
+      const generator = mockGenerator([
+        {
+          type: 'approval_required',
+          approvalRequest: {
+            toolName: 'write_file',
+            input: { path: '/test' },
+            description: 'Write file',
+          },
+        },
+        { type: 'done' },
+      ]);
+
+      await controller.consumeStream(generator, { onApprovalRequired });
+
+      expect(decisionCallback).toHaveBeenCalledWith('write_file', 'allow');
+    });
+
+    test('无 onApprovalRequired 回调时 approval_required 被忽略', async () => {
+      const onText = jest.fn();
+
+      const generator = mockGenerator([
+        { type: 'text', content: 'Hello.\n' },
+        {
+          type: 'approval_required',
+          approvalRequest: {
+            toolName: 'write_file',
+            input: {},
+            description: '',
+          },
+        },
+        { type: 'text', content: 'World.\n' },
+        { type: 'done' },
+      ]);
+
+      const message = await controller.consumeStream(generator, { onText });
+
+      expect(message.content).toBe('Hello.\nWorld.\n');
     });
   });
 
@@ -175,7 +273,6 @@ describe('StreamController', () => {
       const message = await controller.consumeStream(throwingGenerator(), { onError });
 
       expect(onError).toHaveBeenCalledWith('Generator exploded');
-      // 错误前累积的内容仍然保留
       expect(message.content).toBe('Before error.\n');
     });
 
