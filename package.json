@@ -20,7 +20,7 @@
     "ai",
     "coding-agent"
   ],
-  "author": "",
+  "author": "Henry Lan",
   "license": "MIT",
   "devDependencies": {
     "@codemirror/state": "^6.4.0",

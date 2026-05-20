@@ -14,10 +14,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/your-username/obsidian-kilocode/releases"><img src="https://img.shields.io/github/v/release/your-username/obsidian-kilocode?style=flat-square&color=FFB800" alt="Release"></a>
-  <a href="https://github.com/your-username/obsidian-kilocode/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
-  <a href="https://github.com/your-username/obsidian-kilocode/stargazers"><img src="https://img.shields.io/github/stars/your-username/obsidian-kilocode?style=flat-square&color=FFB800" alt="Stars"></a>
-  <a href="https://github.com/your-username/obsidian-kilocode/issues"><img src="https://img.shields.io/github/issues/your-username/obsidian-kilocode?style=flat-square" alt="Issues"></a>
+  <a href="https://github.com/realhenrylan/obsidian-with-kilocode/releases"><img src="https://img.shields.io/github/v/release/realhenrylan/obsidian-with-kilocode?style=flat-square&color=FFB800" alt="Release"></a>
+  <a href="https://github.com/realhenrylan/obsidian-with-kilocode/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
+  <a href="https://github.com/realhenrylan/obsidian-with-kilocode/stargazers"><img src="https://img.shields.io/github/stars/realhenrylan/obsidian-with-kilocode?style=flat-square&color=FFB800" alt="Stars"></a>
+  <a href="https://github.com/realhenrylan/obsidian-with-kilocode/issues"><img src="https://img.shields.io/github/issues/realhenrylan/obsidian-with-kilocode?style=flat-square" alt="Issues"></a>
   <a href="https://obsidian.md/plugins?id=kilocode"><img src="https://img.shields.io/badge/Obsidian-Community%20Plugin-purple?style=flat-square&logo=obsidian" alt="Obsidian Plugin"></a>
 </p>
 
@@ -60,7 +60,7 @@ npm install -g @kilocode/cli
 
 #### From GitHub Release
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/your-username/obsidian-kilocode/releases/latest)
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/realhenrylan/obsidian-with-kilocode/releases/latest)
 2. Create a folder `kilocode` in your vault's plugins folder:
    ```
    /path/to/vault/.obsidian/plugins/kilocode/
@@ -72,7 +72,7 @@ npm install -g @kilocode/cli
 
 ```bash
 cd /path/to/vault/.obsidian/plugins
-git clone https://github.com/your-username/obsidian-kilocode.git
+git clone https://github.com/realhenrylan/obsidian-with-kilocode.git
 cd obsidian-kilocode
 npm install
 npm run build
@@ -223,7 +223,7 @@ src/
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/obsidian-kilocode.git
+git clone https://github.com/realhenrylan/obsidian-with-kilocode.git
 cd obsidian-kilocode
 
 # Install dependencies
@@ -345,8 +345,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- [GitHub Issues](https://github.com/your-username/obsidian-kilocode/issues) - Bug reports and feature requests
-- [Discussions](https://github.com/your-username/obsidian-kilocode/discussions) - Questions and community chat
+- [GitHub Issues](https://github.com/realhenrylan/obsidian-with-kilocode/issues) - Bug reports and feature requests
+- [Discussions](https://github.com/realhenrylan/obsidian-with-kilocode/discussions) - Questions and community chat
 - [Discord](https://discord.gg/kilocode) - Real-time support
 
 ---
