@@ -8,6 +8,8 @@ import { StreamController } from './controllers/StreamController';
 import { InputController } from './controllers/InputController';
 import { ConversationService } from './services/ConversationService';
 import { MessageRenderer } from './rendering/MessageRenderer';
+import { InlineEditModal } from '../inline-edit/InlineEditModal';
+import { DiffViewer } from '../inline-edit/DiffViewer';
 
 export class KiloCodeView extends ItemView {
   private plugin: KiloCodePlugin;
@@ -44,6 +46,7 @@ export class KiloCodeView extends ItemView {
 
   async onOpen(): Promise<void> {
     await this.conversationService.initialize();
+    this.registerInlineEditCommand();
     this.render();
   }
 
@@ -216,6 +219,48 @@ export class KiloCodeView extends ItemView {
       new Notice(`Failed to send message: ${message}`);
       console.error('[KiloCodeView] handleSend error:', error);
     }
+  }
+
+  /** 注册 Inline Edit 命令 */
+  private registerInlineEditCommand(): void {
+    this.plugin.addCommand({
+      id: 'inline-edit',
+      name: 'Inline Edit',
+      editorCallback: (editor) => {
+        const selection = editor.getSelection();
+        if (selection) {
+          this.showInlineEditModal(selection, editor);
+        }
+      },
+      hotkeys: [{ modifiers: ['Ctrl', 'Shift'], key: 'e' }],
+    });
+  }
+
+  /** 显示 Inline Edit 模态框 */
+  private showInlineEditModal(selectedText: string, editor: any): void {
+    new InlineEditModal(this.app, selectedText, async (instruction) => {
+      // TODO: 调用 KiloCode CLI 进行编辑
+      // const editedText = await this.plugin.kiloCodeRuntime.inlineEdit(selectedText, instruction);
+      // this.showDiffPreview(editor, selectedText, editedText);
+    }).open();
+  }
+
+  /** 显示 diff 预览 */
+  private showDiffPreview(editor: any, originalText: string, newText: string): void {
+    const diffContainer = document.createElement('div');
+    document.body.appendChild(diffContainer);
+
+    const diffViewer = new DiffViewer(diffContainer, originalText, newText);
+    diffViewer.render();
+
+    diffContainer.addEventListener('diff-accepted', ((e: CustomEvent) => {
+      editor.replaceSelection(e.detail.newText);
+      diffContainer.remove();
+    }) as EventListener);
+
+    diffContainer.addEventListener('diff-rejected', () => {
+      diffContainer.remove();
+    });
   }
 
   /** 处理取消 */
