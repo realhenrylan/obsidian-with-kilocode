@@ -1,6 +1,7 @@
 // src/main.ts
 
-import { Plugin } from 'obsidian';
+import { Plugin, FileSystemAdapter } from 'obsidian';
+import * as path from 'path';
 import { VIEW_TYPE_KILOCODE } from './core/types';
 import type { KiloCodeSettings } from './core/types';
 import { KiloCodeView } from './features/chat/KiloCodeView';
@@ -18,7 +19,11 @@ export default class KiloCodePlugin extends Plugin {
     await this.loadSettings();
 
     // 创建 BinaryManager 并后台预加载二进制
-    this.binaryManager = new BinaryManager(this.manifest.dir ?? '');
+    // manifest.dir 是相对路径，需要转为绝对路径以确保 fs 和 spawn 正常工作
+    const adapter = this.app.vault.adapter;
+    const vaultPath = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : '';
+    const pluginDir = path.join(vaultPath, this.manifest.dir ?? '');
+    this.binaryManager = new BinaryManager(pluginDir);
     this.binaryManager.preload(this.settings).catch(err => {
       console.error('[KiloCode] Binary preload failed:', err);
     });
