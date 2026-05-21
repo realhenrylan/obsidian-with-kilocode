@@ -648,6 +648,13 @@ export class KiloCodeView extends ItemView {
       this.tabManager.getActiveTab()?.setStreaming(false);
       this.updateButtonStates();
     } finally {
+      // 确保 streaming 状态一定被重置（无论成功、异常、或 cancel）
+      const tab = this.tabManager.getActiveTab();
+      if (tab?.state.isStreaming) {
+        tab.setStreaming(false);
+      }
+      this.updateButtonStates();
+      // 清除发送者标签 ID
       this.senderTabId = null;
     }
   }
