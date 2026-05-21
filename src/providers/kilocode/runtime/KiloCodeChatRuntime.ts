@@ -417,6 +417,11 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     }
   }
 
+  /**
+   * 解析 SSE 流，合并同一次 read() 内的相邻同类 chunk。
+   * 单次 read() 可能包含多个 SSE event，将连续的 text/thinking 合并后 yield，
+   * 减少下游 for-await 循环和 DOM 更新次数。
+   */
   private async *parseEventStream(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamChunk> {
     const reader = body.getReader();
     const decoder = new TextDecoder();
@@ -430,6 +435,9 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       const events = buffer.split(/\r?\n\r?\n/);
       buffer = events.pop() ?? '';
 
+      // 收集本次 read() 的所有 chunk，合并相邻同类
+      const chunks: StreamChunk[] = [];
+
       for (const event of events) {
         const dataLines = event
           .split(/\r?\n/)
@@ -442,17 +450,63 @@ export class KiloCodeChatRuntime implements ChatRuntime {
             const parsed = JSON.parse(data);
             const extracted = this.extractThinkingAndText(parsed);
             for (const t of extracted.thinking) {
-              yield { type: 'thinking', content: t };
+              chunks.push({ type: 'thinking', content: t });
             }
             for (const t of extracted.text) {
-              yield { type: 'text', content: t };
+              chunks.push({ type: 'text', content: t });
             }
+          } catch {
+            chunks.push({ type: 'text', content: data });
+          }
+        }
+      }
+
+      // 合并相邻同类 chunk 后 yield
+      yield* this.mergeAdjacentChunks(chunks);
+    }
+
+    // 处理 buffer 中剩余的数据
+    if (buffer.trim()) {
+      const remaining = buffer.split(/\r?\n\r?\n/);
+      for (const event of remaining) {
+        const dataLines = event
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trim());
+        for (const data of dataLines) {
+          if (!data || data === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(data);
+            const extracted = this.extractThinkingAndText(parsed);
+            for (const t of extracted.thinking) yield { type: 'thinking', content: t };
+            for (const t of extracted.text) yield { type: 'text', content: t };
           } catch {
             yield { type: 'text', content: data };
           }
         }
       }
     }
+  }
+
+  /** 合并相邻同类 chunk（连续 text 合并为一个，连续 thinking 合并为一个） */
+  private *mergeAdjacentChunks(chunks: StreamChunk[]): Generator<StreamChunk> {
+    if (chunks.length === 0) return;
+
+    let current: StreamChunk = { ...chunks[0] };
+    for (let i = 1; i < chunks.length; i++) {
+      const next = chunks[i];
+      if (next.type === current.type && (current.type === 'text' || current.type === 'thinking')) {
+        // 同类文本 chunk，合并内容
+        current = {
+          type: current.type,
+          content: (current.content || '') + (next.content || ''),
+        };
+      } else {
+        yield current;
+        current = { ...next };
+      }
+    }
+    yield current;
   }
 
   private extractText(value: unknown): string[] {
@@ -560,8 +614,11 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   private request(path: string, init: RequestInit = {}): Promise<Response> {
     if (!this.serverBaseUrl) throw new Error('KiloCode server URL is not available');
 
+    // 捕获到局部变量，确保 TypeScript 类型缩窄（string 而非 string | null）
+    const baseUrl = this.serverBaseUrl;
+
     return new Promise((resolve, reject) => {
-      const url = new URL(path, this.serverBaseUrl);
+      const url = new URL(path, baseUrl);
       const method = (init.method || 'GET') as string;
 
       // 从 init.headers 提取键值对

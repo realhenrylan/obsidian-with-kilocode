@@ -17,6 +17,13 @@ import { CLIErrorHandler } from '../../shared/ErrorNotice';
 import { PlanModeController } from './PlanModeController';
 import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import type { ChatRuntime } from '../../core/providers/types';
+
+/** 按 Tab 缓冲的流式状态（用于跨标签流式恢复） */
+interface TabStreamingState {
+  content: string;
+  thinking: string;
+  toolCalls: Map<string, ToolCallInfo>;
+}
 import { ApprovalManager } from '../../core/security/ApprovalManager';
 import { showApprovalModal } from '../../core/security/ApprovalModal';
 import { CurrentNoteContext } from './ui/CurrentNoteContext';
@@ -51,6 +58,10 @@ export class KiloCodeView extends ItemView {
 
   // 流式发送者标签 ID（防止跨标签渲染）
   private senderTabId: string | null = null;
+
+  // 流式期间切换标签支持：按标签缓冲流式状态 + 切换中标志
+  private streamingStates: Map<string, TabStreamingState> = new Map();
+  private isSwitchingTab = false;
 
   constructor(leaf: WorkspaceLeaf, plugin: KiloCodePlugin) {
     super(leaf);
@@ -113,6 +124,9 @@ export class KiloCodeView extends ItemView {
     this.streamController.cancel();
     this.approvalManager.cancelAll();
     this.inputController.cancel();
+    this.streamingStates.clear();
+    // 刷新待写入的会话数据，防止防抖期间数据丢失
+    await this.conversationService.flush();
     this.messageRenderer = null;
     this.isLayoutBuilt = false;
   }
@@ -379,14 +393,15 @@ export class KiloCodeView extends ItemView {
   private async loadConversationMessages(conversationId: string): Promise<void> {
     if (!this.messageRenderer || !this.messagesEl) return;
 
+    // 先清空消息区，防止 await 期间 MessageRenderer 引用到旧标签的 DOM
+    this.messagesEl.empty();
+
     const conversation = await this.conversationService.getConversation(conversationId);
     if (!conversation) {
       console.warn('[KiloCodeView] Conversation not found:', conversationId);
       return;
     }
 
-    // 清空消息区域并重新渲染
-    this.messagesEl.empty();
     this.messageRenderer.renderMessages(conversation.messages);
   }
 
@@ -429,33 +444,47 @@ export class KiloCodeView extends ItemView {
   // 标签页操作
   // ============================================
 
-  /** 处理标签页点击 */
+  /** 处理标签页点击（流式进行中也可切换，通过 TabStreamingState 恢复渲染） */
   private async handleTabClick(tabId: string): Promise<void> {
-    // 流式进行中时阻止切换标签（防止响应串台）
-    const activeTab = this.tabManager.getActiveTab();
-    if (activeTab?.state.isStreaming) {
-      new Notice('Please wait for the current response to finish before switching tabs.');
-      return;
+    this.isSwitchingTab = true;
+    try {
+      const tab = this.tabManager.switchTab(tabId);
+      if (!tab) return;
+
+      // 保存当前标签的草稿
+      this.saveCurrentDraft();
+
+      // 加载目标标签的会话消息
+      if (tab.state.conversationId) {
+        await this.loadConversationMessages(tab.state.conversationId);
+      } else {
+        this.messagesEl?.empty();
+      }
+
+      // 如果目标标签有正在进行的流，重建流式渲染状态
+      if (tab.state.isStreaming) {
+        const state = this.streamingStates.get(tabId);
+        if (state) {
+          this.messageRenderer?.addAssistantMessage();
+          if (state.thinking) {
+            this.messageRenderer?.appendThinking(state.thinking);
+          }
+          if (state.content) {
+            this.messageRenderer?.appendText(state.content);
+          }
+          for (const toolCall of state.toolCalls.values()) {
+            this.renderToolCall(toolCall);
+          }
+        }
+      }
+
+      // 恢复草稿
+      this.restoreDraft(tab.state.draftMessage);
+
+      this.updateUI();
+    } finally {
+      this.isSwitchingTab = false;
     }
-
-    const tab = this.tabManager.switchTab(tabId);
-    if (!tab) return;
-
-    // 保存当前标签的草稿
-    this.saveCurrentDraft();
-
-    // 加载新标签的消息
-    if (tab.state.conversationId) {
-      await this.loadConversationMessages(tab.state.conversationId);
-    } else {
-      // 新标签，清空消息区域
-      this.messagesEl?.empty();
-    }
-
-    // 恢复草稿
-    this.restoreDraft(tab.state.draftMessage);
-
-    this.updateUI();
   }
 
   /** 处理新建标签页 */
@@ -530,10 +559,20 @@ export class KiloCodeView extends ItemView {
 
     if (activeTab.state.isStreaming) return;
 
+    // 记录发送者标签 ID（在 try 外定义，供 catch/finally 使用）
+    const tabId = activeTab.id;
+
     try {
       // 0. 递增流式代数（冲突保护）+ 记录发送者标签 ID
       const generation = activeTab.bumpStreamGeneration();
       this.senderTabId = activeTab.id;
+
+      // 初始化该标签的流式状态缓冲（用于跨标签切换恢复）
+      this.streamingStates.set(tabId, {
+        content: '',
+        thinking: '',
+        toolCalls: new Map(),
+      });
 
       // 1. 确保会话存在
       if (!activeTab.state.conversationId) {
@@ -586,8 +625,10 @@ export class KiloCodeView extends ItemView {
       activeTab.setStreaming(true);
       this.updateButtonStates();
 
-      // 创建空的助手消息容器（流式渲染目标）
-      this.messageRenderer?.addAssistantMessage();
+      // 创建空的助手消息容器（流式渲染目标，仅当前标签即发送者时创建）
+      if (this.isSenderTabActive()) {
+        this.messageRenderer?.addAssistantMessage();
+      }
 
       // 设置审批决定回调
       this.streamController.setApprovalDecisionCallback((toolName, decision) => {
@@ -597,22 +638,37 @@ export class KiloCodeView extends ItemView {
 
       const assistantMessage = await this.streamController.consumeStream(generator, {
         onText: (text) => {
-          // 增量渲染文本
-          if (this.isSenderTabActive()) {
+          // 始终缓冲到标签状态（跨标签切换时恢复用）
+          const state = this.streamingStates.get(tabId);
+          if (state) state.content += text;
+          // 仅在活跃且不在切换中时增量渲染
+          if (!this.isSwitchingTab && this.isSenderTabActive()) {
             this.messageRenderer?.appendText(text);
           }
         },
         onThinking: (text) => {
-          // 增量渲染 thinking
-          if (this.isSenderTabActive()) {
+          const state = this.streamingStates.get(tabId);
+          if (state) state.thinking += text;
+          if (!this.isSwitchingTab && this.isSenderTabActive()) {
             this.messageRenderer?.appendThinking(text);
           }
         },
         onToolCall: (toolCall) => {
-          if (this.isSenderTabActive()) this.renderToolCall(toolCall);
+          const state = this.streamingStates.get(tabId);
+          if (state) state.toolCalls.set(toolCall.id, toolCall);
+          if (!this.isSwitchingTab && this.isSenderTabActive()) {
+            this.renderToolCall(toolCall);
+          }
         },
         onToolResult: (id, result) => {
-          if (this.isSenderTabActive()) this.updateToolCallResult(id, result);
+          const state = this.streamingStates.get(tabId);
+          if (state) {
+            const tc = state.toolCalls.get(id);
+            if (tc) tc.status = 'completed';
+          }
+          if (!this.isSwitchingTab && this.isSenderTabActive()) {
+            this.updateToolCallResult(id, result);
+          }
         },
         onError: (error) => new Notice(`Error: ${error}`),
         onComplete: () => {
@@ -630,8 +686,13 @@ export class KiloCodeView extends ItemView {
       activeTab.setStreaming(false);
       this.updateButtonStates();
 
-      // 流完成后做最终 Markdown 渲染
-      this.messageRenderer?.finalizeMessage();
+      // 清理流状态缓冲
+      this.streamingStates.delete(tabId);
+
+      // 流完成后做最终 Markdown 渲染（仅当发送者标签仍活跃时）
+      if (this.isSenderTabActive()) {
+        this.messageRenderer?.finalizeMessage();
+      }
 
       // 6. 保存助手消息到会话
       await this.conversationService.addMessage(
@@ -645,14 +706,15 @@ export class KiloCodeView extends ItemView {
       const message = error instanceof Error ? error.message : String(error);
       new Notice(`Failed to send message: ${message}`);
       console.error('[KiloCodeView] handleSend error:', error);
-      this.tabManager.getActiveTab()?.setStreaming(false);
+      activeTab.setStreaming(false);
+      this.streamingStates.delete(tabId);
       this.updateButtonStates();
     } finally {
       // 确保 streaming 状态一定被重置（无论成功、异常、或 cancel）
-      const tab = this.tabManager.getActiveTab();
-      if (tab?.state.isStreaming) {
-        tab.setStreaming(false);
+      if (activeTab.state.isStreaming) {
+        activeTab.setStreaming(false);
       }
+      this.streamingStates.delete(tabId);
       this.updateButtonStates();
       // 清除发送者标签 ID
       this.senderTabId = null;

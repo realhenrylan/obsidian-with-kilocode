@@ -28,8 +28,8 @@ export default class KiloCodePlugin extends Plugin {
       console.error('[KiloCode] Binary preload failed:', err);
     });
 
-    // 注册 Provider
-    ProviderRegistry.register(createKilocodeRegistration(this.binaryManager));
+    // 注册 Provider（传入 settings getter，确保 runtime 拿到最新的用户配置）
+    ProviderRegistry.register(createKilocodeRegistration(this.binaryManager, () => this.settings));
 
     // 注册视图
     this.registerView(
@@ -56,7 +56,7 @@ export default class KiloCodePlugin extends Plugin {
   }
 
   onunload() {
-    // 清理资源
+    // 清理资源：flush 由 KiloCodeView.onClose() 处理
   }
 
   async loadSettings() {

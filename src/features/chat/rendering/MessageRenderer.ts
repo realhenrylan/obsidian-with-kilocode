@@ -18,6 +18,8 @@ export class MessageRenderer {
   private currentTextEl: HTMLElement | null = null;
   private currentThinkingEl: HTMLElement | null = null;
   private currentTextContent: string = '';
+  // scrollToBottom 节流：使用 requestAnimationFrame 避免高频 DOM 回流
+  private scrollRafId: number | null = null;
 
   constructor(container: HTMLElement, app: App, component: Component) {
     this.container = container;
@@ -83,33 +85,43 @@ export class MessageRenderer {
     this.scrollToBottom();
   }
 
-  /** 流完成后做最终 Markdown 渲染 */
+  /**
+   * 流完成后做最终 Markdown 渲染。
+   * 使用 requestAnimationFrame 延迟渲染，避免阻塞 UI 线程。
+   */
   finalizeMessage(): void {
     if (!this.currentAssistantEl || !this.currentTextEl) return;
 
+    // 捕获引用（defer 回调需要）
+    const assistantEl = this.currentAssistantEl;
+    const textEl = this.currentTextEl;
+    const textContent = this.currentTextContent;
+
     // 移除临时 streaming-text span
-    const streamingSpan = this.currentTextEl.querySelector('.kilo-streaming-text');
+    const streamingSpan = textEl.querySelector('.kilo-streaming-text');
     if (streamingSpan) streamingSpan.remove();
 
-    // 用 MarkdownRenderer 渲染最终文本内容
-    if (this.currentTextContent) {
-      const textEl = this.currentTextEl.createDiv({ cls: 'kilo-message-text' });
-      void MarkdownRenderer.renderMarkdown(
-        this.currentTextContent,
-        textEl,
-        '',
-        this.component,
-      );
-    }
-
-    // 添加操作按钮
-    this.addMessageActions(this.currentAssistantEl);
-
-    // 清空流式引用
+    // 清空流式引用（释放内存，defer 回调使用捕获的局部变量）
     this.currentAssistantEl = null;
     this.currentTextEl = null;
     this.currentThinkingEl = null;
     this.currentTextContent = '';
+
+    // 延迟到下一帧渲染 Markdown，让 UI 先更新流式完成状态
+    requestAnimationFrame(() => {
+      if (textContent) {
+        const markdownEl = textEl.createDiv({ cls: 'kilo-message-text' });
+        void MarkdownRenderer.renderMarkdown(
+          textContent,
+          markdownEl,
+          '',
+          this.component,
+        );
+      }
+
+      // 添加操作按钮
+      this.addMessageActions(assistantEl);
+    });
   }
 
   // ============================================
@@ -302,7 +314,15 @@ export class MessageRenderer {
     return texts[status] || status;
   }
 
+  /**
+   * 节流滚动到底部：使用 requestAnimationFrame 合并同一帧内的多次调用，
+   * 避免高频 SSE chunk 导致的 layout thrashing
+   */
   scrollToBottom(): void {
-    this.container.scrollTop = this.container.scrollHeight;
+    if (this.scrollRafId !== null) return;
+    this.scrollRafId = requestAnimationFrame(() => {
+      this.scrollRafId = null;
+      this.container.scrollTop = this.container.scrollHeight;
+    });
   }
 }

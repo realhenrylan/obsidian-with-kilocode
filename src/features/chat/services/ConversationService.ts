@@ -4,6 +4,12 @@ import type { Conversation, ConversationMeta, Message } from '../../../core/type
 import { App } from 'obsidian';
 
 /**
+ * 磁盘写入防抖间隔（ms）。
+ * 流式响应期间每条消息都会触发 addMessage，防抖合并可减少磁盘 I/O 次数。
+ */
+const SAVE_DEBOUNCE_MS = 300;
+
+/**
  * 会话服务
  * 管理会话的创建、保存、恢复和删除
  */
@@ -13,6 +19,9 @@ export class ConversationService {
   private storagePath: string;
   // 简单的 Promise 队列，确保 addMessage 等操作按顺序执行，避免竞态条件
   private queue: Promise<void> = Promise.resolve();
+  // 磁盘写入防抖：标记脏会话，延迟批量写入
+  private dirtyConversations: Set<string> = new Set();
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(app: App, vaultPath: string) {
     this.app = app;
@@ -31,6 +40,33 @@ export class ConversationService {
     const result = this.queue.then(task, task);
     this.queue = result.then(() => {}, () => {});
     return result;
+  }
+
+  /** 调度防抖写入：重置定时器，SAVE_DEBOUNCE_MS 后执行 */
+  private scheduleSave(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      void this.flushDirty();
+    }, SAVE_DEBOUNCE_MS);
+  }
+
+  /** 将所有脏会话写入磁盘 */
+  private async flushDirty(): Promise<void> {
+    const ids = [...this.dirtyConversations];
+    this.dirtyConversations.clear();
+    for (const id of ids) {
+      const conversation = this.conversations.get(id);
+      if (!conversation) continue;
+      try {
+        await this.saveMetadata(conversation);
+        await this.saveMessages(conversation);
+      } catch (err) {
+        console.error('[ConversationService] flushDirty failed for', id, err);
+        // 写入失败时重新标记为脏，下次重试
+        this.dirtyConversations.add(id);
+      }
+    }
   }
 
   /** 初始化存储目录 */
@@ -68,25 +104,29 @@ export class ConversationService {
   async getConversation(id: string): Promise<Conversation | null> {
     this.validateId(id);
     const conversation = this.conversations.get(id);
-    if (!conversation) return null;
-
-    // 如果消息为空，尝试加载
+    if (!conversation) {
+      console.warn('[ConversationService] getConversation: not found:', id);
+      return null;
+    }
     if (conversation.messages.length === 0) {
       await this.loadMessages(conversation);
     }
-
+    console.log('[ConversationService] getConversation:', id, 'messages:', conversation.messages.length);
     return conversation;
   }
 
-  /** 添加消息（通过队列保证顺序执行，避免并发竞态） */
+  /** 添加消息（内存立即更新 + 磁盘写入防抖） */
   async addMessage(conversationId: string, message: Message): Promise<void> {
     return this.enqueue(async () => {
       this.validateId(conversationId);
       const conversation = this.conversations.get(conversationId);
       if (!conversation) {
+        console.error('[ConversationService] addMessage: conversation not found:', conversationId, 'keys:', [...this.conversations.keys()]);
         throw new Error(`Conversation ${conversationId} not found`);
       }
 
+      console.log('[ConversationService] addMessage:', message.role, 'to', conversationId, 'current count:', conversation.messages.length);
+      // 内存立即更新（保证后续读取一致性）
       conversation.messages.push(message);
       conversation.messageCount = conversation.messages.length;
       conversation.updatedAt = Date.now();
@@ -97,9 +137,22 @@ export class ConversationService {
         conversation.preview = message.content.substring(0, 50) + (message.content.length > 50 ? '...' : '');
       }
 
-      await this.saveMetadata(conversation);
-      await this.saveMessages(conversation);
+      // 标记脏并调度防抖写入（而非立即写磁盘）
+      this.dirtyConversations.add(conversationId);
+      this.scheduleSave();
     });
+  }
+
+  /**
+   * 立即将所有脏会话写入磁盘。
+   * 在标签切换、视图关闭、插件卸载时调用，防止数据丢失。
+   */
+  async flush(): Promise<void> {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    await this.flushDirty();
   }
 
   /** 删除会话 */
