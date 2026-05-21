@@ -9,6 +9,14 @@ import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
 
+const mockBinaryManager = {
+  getBinaryPath: jest.fn().mockResolvedValue('/mock/path/kilo'),
+  isReady: jest.fn().mockReturnValue(true),
+  preload: jest.fn().mockResolvedValue(undefined),
+} as unknown as import('../../../src/core/binary/BinaryManager').BinaryManager;
+
+const mockSettings = { cliPath: '', mirrorUrl: '' } as any;
+
 function createMockProcess() {
   const stdin = new PassThrough();
   const stdout = new PassThrough();
@@ -30,7 +38,7 @@ describe('KiloCodeChatRuntime', () => {
     jest.clearAllMocks();
     mockProc = createMockProcess();
     (spawn as jest.Mock).mockReturnValue(mockProc.proc);
-    runtime = new KiloCodeChatRuntime('kilo');
+    runtime = new KiloCodeChatRuntime(mockBinaryManager, mockSettings);
   });
 
   afterEach(() => {
@@ -40,7 +48,7 @@ describe('KiloCodeChatRuntime', () => {
   describe('start', () => {
     test('spawns kilo CLI with --mode json-rpc', async () => {
       await runtime.start();
-      expect(spawn).toHaveBeenCalledWith('kilo', ['--mode', 'json-rpc'], {
+      expect(spawn).toHaveBeenCalledWith('/mock/path/kilo', ['--mode', 'json-rpc'], {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     });
