@@ -36,6 +36,17 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
+      .setName('Download Mirror URL')
+      .setDesc('Custom mirror URL for downloading CLI binary. Leave empty to use npm registry.')
+      .addText(text => text
+        .setPlaceholder('https://registry.npmjs.org')
+        .setValue(this.plugin.settings.mirrorUrl)
+        .onChange(async (value) => {
+          this.plugin.settings.mirrorUrl = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
       .setName('Auto Start')
       .setDesc('Automatically start KiloCode CLI when opening a vault')
       .addToggle(toggle => toggle
