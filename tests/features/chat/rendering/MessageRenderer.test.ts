@@ -5,13 +5,43 @@
 // tests/features/chat/rendering/MessageRenderer.test.ts
 
 import { MessageRenderer } from '../../../../src/features/chat/rendering/MessageRenderer';
-import type { Message } from '../../../../src/core/types';
+import type { Message, ContentBlock } from '../../../../src/core/types';
 
-// Mock Obsidian
+// Mock Obsidian — renderMarkdown 在目标容器中创建 <pre><code> 结构
 jest.mock('obsidian', () => ({
   App: class {},
   Component: class {},
-  MarkdownRenderer: { renderMarkdown: jest.fn() },
+  MarkdownRenderer: {
+    renderMarkdown: jest.fn((content: string, el: HTMLElement) => {
+      // 模拟 Obsidian 的代码块渲染：` ```lang\ncode\n``` → <pre><code class="language-lang">code</code></pre>  `
+      const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+      let match;
+      let lastIndex = 0;
+      let hasContent = false;
+
+      while ((match = codeBlockRegex.exec(content)) !== null) {
+        hasContent = true;
+        // 代码块之前的文本
+        const before = content.slice(lastIndex, match.index);
+        if (before) el.createSpan({ text: before });
+
+        const pre = el.createEl('pre');
+        const code = pre.createEl('code', {
+          cls: match[1] ? `language-${match[1]}` : '',
+          text: match[2],
+        });
+
+        lastIndex = match.index + match[0].length;
+      }
+
+      if (!hasContent) {
+        el.createSpan({ text: content });
+      } else {
+        const after = content.slice(lastIndex);
+        if (after) el.createSpan({ text: after });
+      }
+    }),
+  },
 }));
 
 /**
@@ -128,5 +158,92 @@ describe('MessageRenderer', () => {
     expect(rewindBtn!.getAttribute('data-message-id')).toBe('msg-42');
     expect(forkBtn!.getAttribute('data-message-id')).toBe('msg-42');
     expect(copyBtn!.getAttribute('data-message-id')).toBe('msg-42');
+  });
+
+  // ============================================
+  // 代码块优化测试
+  // ============================================
+
+  test('代码块被包裹到 .kilo-code-wrapper', () => {
+    const message: Message = {
+      id: 'msg-code',
+      role: 'assistant',
+      content: '```javascript\nconsole.log("hello");\n```',
+      timestamp: Date.now(),
+    };
+
+    renderer.renderMessage(message);
+
+    const wrapper = container.querySelector('.kilo-code-wrapper');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper!.querySelector('pre')).not.toBeNull();
+  });
+
+  test('代码块显示语言标签', () => {
+    const message: Message = {
+      id: 'msg-lang',
+      role: 'assistant',
+      content: '```python\nprint("hello")\n```',
+      timestamp: Date.now(),
+    };
+
+    renderer.renderMessage(message);
+
+    const langLabel = container.querySelector('.kilo-code-lang');
+    expect(langLabel).not.toBeNull();
+    expect(langLabel!.textContent).toBe('python');
+  });
+
+  test('代码块有复制按钮', () => {
+    const message: Message = {
+      id: 'msg-copy',
+      role: 'assistant',
+      content: '```typescript\nconst x = 1;\n```',
+      timestamp: Date.now(),
+    };
+
+    renderer.renderMessage(message);
+
+    const copyBtn = container.querySelector('.kilo-code-copy');
+    expect(copyBtn).not.toBeNull();
+    expect(copyBtn!.textContent).toBe('Copy');
+  });
+
+  test('无语言标识时显示 code', () => {
+    const message: Message = {
+      id: 'msg-nolang',
+      role: 'assistant',
+      content: '```\nplain code\n```',
+      timestamp: Date.now(),
+    };
+
+    renderer.renderMessage(message);
+
+    const langLabel = container.querySelector('.kilo-code-lang');
+    expect(langLabel).not.toBeNull();
+    expect(langLabel!.textContent).toBe('code');
+  });
+
+  // ============================================
+  // ContentBlock 类型测试
+  // ============================================
+
+  test('Message 支持 contentBlocks 字段', () => {
+    const blocks: ContentBlock[] = [
+      { type: 'thinking', content: 'Let me think...' },
+      { type: 'text', content: 'Here is the answer.' },
+    ];
+    const message: Message = {
+      id: 'msg-blocks',
+      role: 'assistant',
+      content: 'Here is the answer.',
+      timestamp: Date.now(),
+      thinking: 'Let me think...',
+      contentBlocks: blocks,
+    };
+
+    expect(message.contentBlocks).toHaveLength(2);
+    expect(message.contentBlocks![0].type).toBe('thinking');
+    expect(message.contentBlocks![1].type).toBe('text');
   });
 });

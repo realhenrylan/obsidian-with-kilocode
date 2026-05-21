@@ -117,6 +117,8 @@ export class MessageRenderer {
           '',
           this.component,
         );
+        // 代码块后处理：语言标签 + 复制按钮
+        this.enhanceCodeBlocks(markdownEl);
       }
 
       // 添加操作按钮
@@ -196,6 +198,8 @@ export class MessageRenderer {
           '',
           this.component,
         );
+        // 代码块后处理：语言标签 + 复制按钮
+        this.enhanceCodeBlocks(textEl);
       }
     } else {
       contentEl.createSpan({ text: message.content });
@@ -218,6 +222,51 @@ export class MessageRenderer {
   // ============================================
   // 通用工具方法
   // ============================================
+
+  /**
+   * 代码块后处理：为 <pre> 元素添加语言标签和复制按钮
+   * Obsidian MarkdownRenderer 生成的代码块结构：`<pre><code class="language-xxx">...</code></pre>`
+   */
+  private enhanceCodeBlocks(container: HTMLElement): void {
+    const pres = container.querySelectorAll('pre');
+    for (const pre of pres) {
+      // 跳过已处理的代码块
+      if (pre.parentElement?.classList.contains('kilo-code-wrapper')) continue;
+
+      const codeEl = pre.querySelector('code');
+      // 提取语言标识（从 class="language-xxx" 中解析）
+      const langClass = codeEl?.className.match(/language-(\w+)/)?.[1] ?? '';
+      const codeText = codeEl?.textContent ?? '';
+
+      // 包裹到 .kilo-code-wrapper
+      const wrapper = document.createElement('div');
+      wrapper.className = 'kilo-code-wrapper';
+      pre.parentNode?.insertBefore(wrapper, pre);
+      wrapper.appendChild(pre);
+
+      // 头部栏：语言标签 + 复制按钮
+      const header = document.createElement('div');
+      header.className = 'kilo-code-header';
+
+      const langLabel = document.createElement('span');
+      langLabel.className = 'kilo-code-lang';
+      langLabel.textContent = langClass || 'code';
+      header.appendChild(langLabel);
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'kilo-code-copy';
+      copyBtn.textContent = 'Copy';
+      copyBtn.addEventListener('click', () => {
+        void navigator.clipboard.writeText(codeText).then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+        });
+      });
+      header.appendChild(copyBtn);
+
+      wrapper.insertBefore(header, pre);
+    }
+  }
 
   /** 为消息添加操作按钮 */
   private addMessageActions(messageEl: HTMLElement): void {

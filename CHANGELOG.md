@@ -8,16 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- **流式期间支持标签切换**: 移除 `handleTabClick()` 中的 `isStreaming` 阻塞 guard，引入 `TabStreamingState` 按标签缓冲流式状态（content/thinking/toolCalls）。`onText`/`onThinking`/`onToolCall`/`onToolResult` 回调始终缓冲到对应标签的状态中，仅当发送者标签活跃且不在切换中时增量渲染 DOM。切换回发送者标签时从缓冲重建流式渲染状态。`isSwitchingTab` 标志防止切换过程中回调竞争渲染。`finalizeMessage()` 仅在发送者标签仍活跃时调用。详见 `.kilo/plans/2026-05-21-stream-tab-switching.md`
+- **ChatState 集中状态管理**: `src/features/chat/state/ChatState.ts` — 管理流式状态（isStreaming/streamGeneration/cancelRequested）、会话状态（currentConversationId/hasPendingConversationSave）、流式内容缓冲（currentTextContent/currentThinkingContent/toolCalls）。使用 getter/setter + 回调通知模式，支持事件订阅（streamingChange/cancelRequested/conversationChange）
+- **ConversationController 会话生命周期控制**: `src/features/chat/controllers/ConversationController.ts` — 从 KiloCodeView 抽取会话管理逻辑，提供 createNew()、switchTo()、ensureConversation()（懒创建）、save()、restoreConversation()、rewind()、fork()、addMessage()、getConversation() 方法。通过回调注入（onRenderMessages/onClearMessages）避免直接依赖 DOM
+- **ContentBlock 类型**: `src/core/types/index.ts` 新增 `ContentBlock` 接口和 `contentBlocks` 字段 — 将消息分解为有序块（text/thinking/tool_use），与现有 thinking/toolCalls 字段并存，提供有序渲染能力
+- **代码块优化**: MessageRenderer 的 `enhanceCodeBlocks()` 方法 — 自动为 `<pre>` 代码块添加 `.kilo-code-wrapper` 包裹、语言标签（从 `class="language-xxx"` 提取）和复制按钮（带 "Copied!" 反馈）
+- **欢迎语随机化**: KiloCodeView 的 `getRandomPlaceholder()` 方法 — textarea 占位符从 5 条提示语中随机选择
+- **会话标题显示**: ConversationService 的 `getConversationTitle()` 轻量查询方法 — 标签栏显示会话标题而非截断的 ID
 
 ### Changed
 
+- **KiloCodeView**: 集成 ChatState 和 ConversationController — 构造函数实例化新组件并注入回调，onOpen/handleTabClick/handleSend/handleRewind/handleFork/handleCopy/handleNewTab/onClose 全部迁移至使用 ConversationController。删除已废弃的 `loadConversationMessages()` 方法
+- **ConversationService**: 移除 2 处诊断用 `console.log`（getConversation/addMessage 的调试输出）
+- **KiloCodeChatRuntime**: 移除 14 处诊断用 `console.log`（启动路径、端口发现、SSE 解析、chunk 内容输出等临时调试日志）
+- **MessageRenderer**: `renderMessage()` 和 `finalizeMessage()` 在 Markdown 渲染后调用 `enhanceCodeBlocks()` 进行代码块后处理
 - **MessageRenderer**: `scrollToBottom()` 使用 `requestAnimationFrame` 节流 — 流式渲染期间每个 SSE chunk 都会触发 `scrollTop` 赋值导致浏览器回流，现在同一帧内多次调用只执行一次，减少 layout thrashing
 - **ConversationService**: `addMessage()` 磁盘写入防抖 — 内存立即更新保证一致性，磁盘写入延迟 300ms 合并，减少流式响应期间的 I/O 次数。新增 `flush()` 方法在视图关闭时强制写入
 - **KiloCodeChatRuntime**: SSE chunk 合并 — `parseEventStream()` 将同次 `read()` 内相邻的 text/thinking chunk 合并后 yield，减少 `for-await` 循环和 UI 回调次数。新增 `mergeAdjacentChunks()` 生成器
 - **MessageRenderer**: `finalizeMessage()` 延迟 Markdown 渲染 — 使用 `requestAnimationFrame` 将 Obsidian `MarkdownRenderer.renderMarkdown()` 推迟到下一帧，避免阻塞 UI 线程
-- **KiloCodeChatRuntime**: 修复 `request()` 方法的 TypeScript 类型错误 — `this.serverBaseUrl` 缩窄为局部变量 `baseUrl`
-- **KiloCodeView**: 移除重复的 `ToolCallInfo` 导入
 - **KiloCodeChatRuntime**: 重写通信层 — 废弃 `kilo run <message>` 子进程模式，改为 `kilo serve` HTTP 模式。`start()` spawn HTTP server 进程，`sendMessage()` 通过 HTTP POST 发送消息并处理 SSE/ndjson 流式响应，`stop()` kill 进程
 - **KiloCodeChatRuntime**: HTTP 请求改用 Node.js `http` 模块 — 浏览器 `fetch()` 在 Electron renderer 进程中受 CORS 限制（`app://obsidian.md` origin 无法访问 `http://127.0.0.1`），Node.js HTTP 完全绕过此限制
 - **KiloCodeView**: 重构为 claudian 架构 — DOM 骨架只在 `onOpen()` 创建一次，通过 `updateUI()` 更新内容，解决 textarea 事件监听器丢失和消息 DOM 被销毁的问题

@@ -21,6 +21,42 @@ export class KiloCodeSettingTab extends PluginSettingTab {
 
     containerEl.createEl('h2', { text: 'KiloCode Settings' });
 
+    // === API 配置 ===
+    containerEl.createEl('h3', { text: 'API Configuration' });
+
+    new Setting(containerEl)
+      .setName('API Key')
+      .setDesc('Your AI provider API key (e.g. Anthropic, OpenAI)')
+      .addText(text => {
+        text.inputEl.type = 'password';
+        text.inputEl.style.width = '100%';
+        text
+          .setPlaceholder('sk-...')
+          .setValue(this.plugin.settings.apiKey)
+          .onChange(async (value) => {
+            this.plugin.settings.apiKey = value;
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
+      .setName('Base URL')
+      .setDesc('API base URL. Leave empty for default provider endpoint.')
+      .addText(text => text
+        .setPlaceholder('https://api.anthropic.com')
+        .setValue(this.plugin.settings.environmentVariables?.['KILO_BASE_URL'] || '')
+        .onChange(async (value) => {
+          if (!this.plugin.settings.environmentVariables) {
+            this.plugin.settings.environmentVariables = {};
+          }
+          if (value) {
+            this.plugin.settings.environmentVariables['KILO_BASE_URL'] = value;
+          } else {
+            delete this.plugin.settings.environmentVariables['KILO_BASE_URL'];
+          }
+          await this.plugin.saveSettings();
+        }));
+
     // === 常规设置 ===
     containerEl.createEl('h3', { text: 'General' });
 

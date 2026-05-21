@@ -55,11 +55,9 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     if (this.serverBaseUrl && this.currentProcess && !this.currentProcess.killed) return;
     if (this.startPromise) return this.startPromise;
 
-    console.log('[KiloCodeChatRuntime] Starting kilo serve...');
     this.startPromise = this.startServer();
     try {
       await this.startPromise;
-      console.log('[KiloCodeChatRuntime] kilo serve ready at', this.serverBaseUrl, 'session:', this.sessionId);
     } catch (err) {
       console.error('[KiloCodeChatRuntime] Failed to start kilo serve:', err);
       throw err;
@@ -110,16 +108,13 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       }
 
       const contentType = response.headers.get('content-type') ?? '';
-      console.log('[KiloCodeChatRuntime] Response OK — status:', response.status, 'content-type:', contentType);
 
       let emitted = false;
       for await (const chunk of this.parseResponse(response)) {
-        console.log('[KiloCodeChatRuntime] Chunk:', JSON.stringify(chunk).slice(0, 200));
         emitted = true;
         yield chunk;
       }
 
-      console.log('[KiloCodeChatRuntime] Stream done. emitted:', emitted, 'status:', response.status);
       yield { type: 'done' };
     } catch (error) {
       if (!this.abortController?.signal.aborted) {
@@ -151,12 +146,10 @@ export class KiloCodeChatRuntime implements ChatRuntime {
 
   private async startServer(): Promise<void> {
     const cliPath = await this.binaryManager.getBinaryPath(this.settings);
-    console.log('[KiloCodeChatRuntime] Binary path:', cliPath);
     this.serverPassword = this.generatePassword();
     this.providerCache = null;
 
     const env = this.buildEnv(this.serverPassword);
-    console.log('[KiloCodeChatRuntime] Spawning:', cliPath, 'serve --port 0');
     this.currentProcess = spawn(cliPath, ['serve', '--port', '0'], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env,
@@ -172,14 +165,10 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       console.warn('[KiloCodeChatRuntime] stderr:', data.toString());
     });
 
-    console.log('[KiloCodeChatRuntime] Waiting for server port...');
     const port = await this.waitForServerPort(this.currentProcess);
-    console.log('[KiloCodeChatRuntime] Got port:', port);
     this.serverBaseUrl = `http://127.0.0.1:${port}`;
     await this.waitForHttpReady();
-    console.log('[KiloCodeChatRuntime] HTTP API ready');
     this.sessionId = await this.createSession();
-    console.log('[KiloCodeChatRuntime] Session created:', this.sessionId);
   }
 
   private waitForServerPort(proc: ChildProcess): Promise<number> {
@@ -391,10 +380,8 @@ export class KiloCodeChatRuntime implements ChatRuntime {
 
   private async *parseResponse(response: Response): AsyncGenerator<StreamChunk> {
     const contentType = response.headers.get('content-type') ?? '';
-    console.log('[KiloCodeChatRuntime] parseResponse — content-type:', contentType, 'has body:', !!response.body);
 
     if (response.body && contentType.includes('text/event-stream')) {
-      console.log('[KiloCodeChatRuntime] Parsing as SSE stream');
       yield* this.parseEventStream(response.body);
       return;
     }
@@ -405,7 +392,6 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     try {
       const json = JSON.parse(bodyText);
       const extracted = this.extractThinkingAndText(json);
-      console.log('[KiloCodeChatRuntime] Extracted — thinking:', extracted.thinking.length, 'text:', extracted.text.length);
       for (const t of extracted.thinking) {
         yield { type: 'thinking', content: t };
       }

@@ -9,7 +9,9 @@ import type KiloCodePlugin from '../../main';
 import { TabManager } from './tabs/TabManager';
 import { StreamController } from './controllers/StreamController';
 import { InputController } from './controllers/InputController';
+import { ConversationController } from './controllers/ConversationController';
 import { ConversationService } from './services/ConversationService';
+import { ChatState } from './state/ChatState';
 import { MessageRenderer } from './rendering/MessageRenderer';
 import { InlineEditModal } from '../inline-edit/InlineEditModal';
 import { DiffViewer } from '../inline-edit/DiffViewer';
@@ -36,6 +38,8 @@ export class KiloCodeView extends ItemView {
   private streamController: StreamController;
   private inputController: InputController;
   private conversationService: ConversationService;
+  private conversationController: ConversationController;
+  private chatState: ChatState;
   private messageRenderer: MessageRenderer | null = null;
   private planModeController: PlanModeController;
   private approvalManager: ApprovalManager;
@@ -74,6 +78,11 @@ export class KiloCodeView extends ItemView {
       plugin.app,
       plugin.app.vault.getRoot().path
     );
+    this.chatState = new ChatState();
+    this.conversationController = new ConversationController(
+      this.conversationService,
+      this.chatState,
+    );
     this.planModeController = new PlanModeController();
     this.approvalManager = new ApprovalManager();
     this.currentNoteContext = new CurrentNoteContext(plugin.app);
@@ -82,6 +91,14 @@ export class KiloCodeView extends ItemView {
     // 设置审批处理器（弹出 Modal）
     this.approvalManager.setApprovalHandler(async (request) => {
       return showApprovalModal(this.app, request);
+    });
+
+    // 注入 ConversationController 回调（避免直接依赖 DOM）
+    this.conversationController.onClearMessages(() => {
+      this.messagesEl?.empty();
+    });
+    this.conversationController.onRenderMessages((messages) => {
+      this.messageRenderer?.renderMessages(messages);
     });
   }
 
@@ -116,7 +133,8 @@ export class KiloCodeView extends ItemView {
     // 恢复当前会话的消息
     const activeTab = this.tabManager.getActiveTab();
     if (activeTab?.state.conversationId) {
-      void this.loadConversationMessages(activeTab.state.conversationId);
+      this.chatState.setConversationId(activeTab.state.conversationId);
+      void this.conversationController.restoreConversation(activeTab.state.conversationId);
     }
   }
 
@@ -125,8 +143,8 @@ export class KiloCodeView extends ItemView {
     this.approvalManager.cancelAll();
     this.inputController.cancel();
     this.streamingStates.clear();
-    // 刷新待写入的会话数据，防止防抖期间数据丢失
-    await this.conversationService.flush();
+    // 通过 ConversationController 刷新待写入的会话数据
+    await this.conversationController.save();
     this.messageRenderer = null;
     this.isLayoutBuilt = false;
   }
@@ -257,7 +275,7 @@ export class KiloCodeView extends ItemView {
 
     this.textareaEl = this.inputContainerEl.createEl('textarea', {
       cls: 'kilo-input',
-      placeholder: 'Type a message... (Enter to send, Shift+Enter for new line)',
+      placeholder: this.getRandomPlaceholder(),
     });
 
     // 粘贴事件
@@ -344,7 +362,7 @@ export class KiloCodeView extends ItemView {
         cls: `kilo-tab ${isActive ? 'kilo-tab-active' : ''}`,
       });
       const label = tab.state.conversationId
-        ? this.truncateId(tab.state.conversationId)
+        ? (this.conversationService.getConversationTitle(tab.state.conversationId) || this.truncateId(tab.state.conversationId))
         : 'New';
       tabEl.createSpan({ text: label });
       this.registerDomEvent(tabEl, 'click', () => void this.handleTabClick(tab.id));
@@ -376,7 +394,7 @@ export class KiloCodeView extends ItemView {
       this.textareaEl.disabled = isStreaming;
       this.textareaEl.placeholder = isStreaming
         ? 'AI is responding...'
-        : 'Type a message... (Enter to send, Shift+Enter for new line)';
+        : this.getRandomPlaceholder();
     }
   }
 
@@ -385,25 +403,21 @@ export class KiloCodeView extends ItemView {
     return id.length > 12 ? id.slice(0, 12) + '...' : id;
   }
 
+  /** 随机占位符提示语 */
+  private getRandomPlaceholder(): string {
+    const placeholders = [
+      'Type a message... (Enter to send, Shift+Enter for new line)',
+      'Ask me anything about your vault...',
+      'What can I help you with?',
+      'Describe what you need...',
+      'Type your question here...',
+    ];
+    return placeholders[Math.floor(Math.random() * placeholders.length)];
+  }
+
   // ============================================
   // 消息管理
   // ============================================
-
-  /** 加载并渲染指定会话的消息 */
-  private async loadConversationMessages(conversationId: string): Promise<void> {
-    if (!this.messageRenderer || !this.messagesEl) return;
-
-    // 先清空消息区，防止 await 期间 MessageRenderer 引用到旧标签的 DOM
-    this.messagesEl.empty();
-
-    const conversation = await this.conversationService.getConversation(conversationId);
-    if (!conversation) {
-      console.warn('[KiloCodeView] Conversation not found:', conversationId);
-      return;
-    }
-
-    this.messageRenderer.renderMessages(conversation.messages);
-  }
 
   /** 在消息区域追加一条用户消息 */
   private appendUserMessage(content: string): void {
@@ -454,12 +468,15 @@ export class KiloCodeView extends ItemView {
       // 保存当前标签的草稿
       this.saveCurrentDraft();
 
-      // 加载目标标签的会话消息
+      // 通过 ConversationController 切换会话（含 save → reset → load → render）
       if (tab.state.conversationId) {
-        await this.loadConversationMessages(tab.state.conversationId);
+        await this.conversationController.switchTo(tab.state.conversationId);
       } else {
         this.messagesEl?.empty();
       }
+
+      // 同步 ChatState
+      this.chatState.setConversationId(tab.state.conversationId ?? null);
 
       // 如果目标标签有正在进行的流，重建流式渲染状态
       if (tab.state.isStreaming) {
@@ -492,7 +509,8 @@ export class KiloCodeView extends ItemView {
     if (this.tabManager.canCreateTab()) {
       this.saveCurrentDraft();
       this.tabManager.createTab();
-      this.messagesEl?.empty();
+      // 通过 ConversationController 重置到空白状态
+      this.conversationController.createNew();
       this.restoreDraft('');
       this.updateUI();
     }
@@ -574,10 +592,10 @@ export class KiloCodeView extends ItemView {
         toolCalls: new Map(),
       });
 
-      // 1. 确保会话存在
+      // 1. 确保会话存在（懒创建）
+      const conversationId = await this.conversationController.ensureConversation();
       if (!activeTab.state.conversationId) {
-        const conversation = await this.conversationService.createConversation();
-        activeTab.setConversation(conversation.id);
+        activeTab.setConversation(conversationId);
         this.updateTabBar();
       }
 
@@ -599,10 +617,7 @@ export class KiloCodeView extends ItemView {
         content: messageWithPrefix,
         timestamp: Date.now(),
       };
-      await this.conversationService.addMessage(
-        activeTab.state.conversationId!,
-        userMessage,
-      );
+      await this.conversationController.addMessage(userMessage);
 
       // 3. 立即在 UI 上显示用户消息
       this.appendUserMessage(content);
@@ -695,10 +710,7 @@ export class KiloCodeView extends ItemView {
       }
 
       // 6. 保存助手消息到会话
-      await this.conversationService.addMessage(
-        activeTab.state.conversationId!,
-        assistantMessage,
-      );
+      await this.conversationController.addMessage(assistantMessage);
 
       // 清除图片
       this.imageContext.clearImages();
@@ -852,19 +864,12 @@ export class KiloCodeView extends ItemView {
 
   /** 回退到指定消息 */
   private async handleRewind(messageId: string): Promise<void> {
-    const activeTab = this.tabManager.getActiveTab();
-    if (!activeTab?.state.conversationId) return;
-
     const confirmed = confirm('Rewind to this message? All subsequent messages will be removed.');
     if (!confirmed) return;
 
     try {
-      const removed = await this.conversationService.rewindToMessage(
-        activeTab.state.conversationId,
-        messageId,
-      );
+      const removed = await this.conversationController.rewind(messageId);
       new Notice(`Rewound. Removed ${removed.length} message(s).`);
-      await this.loadConversationMessages(activeTab.state.conversationId);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       new Notice(`Rewind failed: ${msg}`);
@@ -873,26 +878,21 @@ export class KiloCodeView extends ItemView {
 
   /** 从指定消息处 fork 新会话 */
   private async handleFork(messageId: string): Promise<void> {
-    const activeTab = this.tabManager.getActiveTab();
-    if (!activeTab?.state.conversationId) return;
-
     if (!this.tabManager.canCreateTab()) {
       new Notice('Maximum tabs reached. Close a tab first.');
       return;
     }
 
     try {
-      const forked = await this.conversationService.forkConversation(
-        activeTab.state.conversationId,
-        messageId,
-      );
+      const forked = await this.conversationController.fork(messageId);
 
       this.saveCurrentDraft();
       const newTab = this.tabManager.createTab();
       newTab.setConversation(forked.id);
 
-      // 加载 fork 的会话消息
-      await this.loadConversationMessages(forked.id);
+      // 切换到 fork 的会话
+      await this.conversationController.switchTo(forked.id);
+      this.chatState.setConversationId(forked.id);
       this.restoreDraft('');
 
       new Notice(`Forked: ${forked.title}`);
@@ -905,12 +905,7 @@ export class KiloCodeView extends ItemView {
 
   /** 复制消息内容到剪贴板 */
   private async handleCopy(messageId: string): Promise<void> {
-    const activeTab = this.tabManager.getActiveTab();
-    if (!activeTab?.state.conversationId) return;
-
-    const conversation = await this.conversationService.getConversation(
-      activeTab.state.conversationId,
-    );
+    const conversation = await this.conversationController.getConversation();
     if (!conversation) return;
 
     const message = conversation.messages.find(m => m.id === messageId);

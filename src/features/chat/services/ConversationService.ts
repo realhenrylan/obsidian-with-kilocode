@@ -111,7 +111,6 @@ export class ConversationService {
     if (conversation.messages.length === 0) {
       await this.loadMessages(conversation);
     }
-    console.log('[ConversationService] getConversation:', id, 'messages:', conversation.messages.length);
     return conversation;
   }
 
@@ -125,7 +124,6 @@ export class ConversationService {
         throw new Error(`Conversation ${conversationId} not found`);
       }
 
-      console.log('[ConversationService] addMessage:', message.role, 'to', conversationId, 'current count:', conversation.messages.length);
       // 内存立即更新（保证后续读取一致性）
       conversation.messages.push(message);
       conversation.messageCount = conversation.messages.length;
@@ -186,6 +184,12 @@ export class ConversationService {
         messageCount: c.messageCount,
         preview: c.preview,
       }));
+  }
+
+  /** 获取会话标题（不加载消息，轻量查询） */
+  getConversationTitle(id: string): string | null {
+    const conversation = this.conversations.get(id);
+    return conversation?.title ?? null;
   }
 
   /** 重命名会话 */

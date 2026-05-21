@@ -28,6 +28,19 @@ export interface Conversation extends ConversationMeta {
 /** 消息角色 */
 export type MessageRole = 'user' | 'assistant' | 'system';
 
+/**
+ * 内容块类型
+ * 将一条消息分解为多个有序块：thinking → text → tool_use → text → ...
+ * 与 thinking / toolCalls 字段并存，提供有序渲染能力
+ */
+export type ContentBlockType = 'text' | 'thinking' | 'tool_use';
+
+export interface ContentBlock {
+  type: ContentBlockType;
+  content: string;
+  toolId?: string;  // type === 'tool_use' 时关联 ToolCallInfo.id
+}
+
 /** 消息 */
 export interface Message {
   id: string;
@@ -37,6 +50,8 @@ export interface Message {
   images?: ImageAttachment[];
   toolCalls?: ToolCallInfo[];
   thinking?: string;
+  /** 有序内容块（可选，向后兼容）。渲染时优先使用此字段 */
+  contentBlocks?: ContentBlock[];
 }
 
 /** 图片附件 */
