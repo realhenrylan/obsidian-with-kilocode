@@ -400,23 +400,10 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     }
 
     const bodyText = await response.text();
-    console.log('[KiloCodeChatRuntime] Non-stream body (len):', bodyText.length);
-    // 将完整响应写入临时文件用于调试 thinking 分离
-    try {
-      const fs = require('fs');
-      fs.writeFileSync('C:\\Users\\henry\\AppData\\Local\\Temp\\kilo-response-debug.json', bodyText);
-      console.log('[KiloCodeChatRuntime] Response written to temp file for analysis');
-    } catch (_e) { /* ignore */ }
     if (!bodyText.trim()) return;
 
     try {
       const json = JSON.parse(bodyText);
-      // 详细日志：输出每个 part 的结构，用于调试 thinking 分离
-      if (json.parts && Array.isArray(json.parts)) {
-        json.parts.forEach((p: any, i: number) => {
-          console.log(`[KiloCodeChatRuntime] Part[${i}]: type=${p.type}, keys=${Object.keys(p).join(',')}, text_len=${(p.text || '').length}, content_len=${(p.content || '').length}`);
-        });
-      }
       const extracted = this.extractThinkingAndText(json);
       console.log('[KiloCodeChatRuntime] Extracted — thinking:', extracted.thinking.length, 'text:', extracted.text.length);
       for (const t of extracted.thinking) {
