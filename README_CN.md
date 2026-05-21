@@ -10,7 +10,7 @@
 <h1 align="center">KiloCode for Obsidian</h1>
 
 <p align="center">
-  <strong>将 KiloCode AI 编码代理嵌入你的 Obsidian Vault</strong>
+  <strong>将 KiloCode AI 编码代理嵌入你的 Obsidian</strong>
 </p>
 
 <p align="center">
@@ -517,7 +517,8 @@ npm run test:coverage
 - [x] 国际化（中文、英文）
 - [x] 虚拟滚动优化长对话性能
 - [x] 分级错误处理
-- [ ] 大型 Vault 性能优化
+- [x] CLI 自动下载（零配置安装）
+- [x] 流式响应性能优化（rAF 滚动节流、磁盘写入防抖、SSE chunk 合并）
 - [ ] 更多语言支持
 - [ ] 自定义主题支持
 - [ ] 第三方扩展插件 API

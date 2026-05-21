@@ -41,6 +41,7 @@
 | 📄 **Current Note Context** | Toggle active note as AI context input |
 | 🛡️ **Permission System** | Yolo/Normal/Plan security modes with per-tool approval dialogs |
 | 🌍 **i18n** | Multi-language support (English, Chinese, Japanese, Korean, and more) |
+| 📦 **CLI Auto-Download** | Zero-config setup — CLI binary auto-downloads from npm on first use |
 
 ---
 
@@ -49,11 +50,8 @@
 ### Prerequisites
 
 - **Obsidian** v1.7.2+ (Desktop only)
-- **KiloCode CLI** installed globally
 
-```bash
-npm install -g @kilocode/cli
-```
+> **No CLI installation required.** The plugin automatically downloads the platform-appropriate KiloCode CLI binary from npm on first use. If you already have `kilo` installed globally, it will be detected and used.
 
 ### Installation
 
@@ -205,9 +203,18 @@ Open Settings → KiloCode to configure:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| **CLI Path** | Path to KiloCode CLI | Auto-detect |
+| **CLI Path** | Path to KiloCode CLI (leave empty for auto-detect) | Auto-detect |
+| **Download Mirror URL** | Custom mirror URL for CLI binary download | npm registry |
 | **Auto Start** | Start CLI on vault open | Off |
-| **API Key** | Your API key | - |
+
+#### API Configuration
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **API Key** | Your API key (password field) | - |
+| **Base URL** | Custom API base URL | - |
+
+> **Note**: `kilo serve` manages its own credentials independently (via CLI keychain or config files). You only need to fill in API Key / Base URL here to **override** the CLI's defaults. If left empty, the plugin uses the CLI's existing credentials automatically.
 
 #### Chat
 
@@ -242,7 +249,7 @@ Open Settings → KiloCode to configure:
 Configure environment variables in Settings → Environment:
 
 - **Shared** — Applied to all providers
-- **KiloCode** — Applied to KiloCode provider only
+- **KiloCode** — Applied to KiloCode provider only. Passes `KILO_API_KEY` and `KILO_BASE_URL` from settings to the `kilo serve` process when configured; otherwise the CLI uses its own stored credentials. Working directory is set to vault path.
 
 ### MCP Servers
 
@@ -278,6 +285,10 @@ src/
 ├── core/
 │   ├── types/
 │   │   └── index.ts              # Core types: Conversation, Message, ToolCallInfo, KiloCodeSettings...
+│   ├── binary/
+│   │   ├── BinaryManager.ts      # CLI binary discovery, download, caching, version management
+│   │   ├── PlatformDetector.ts   # Platform/arch/AVX2/musl detection, npm package name construction
+│   │   └── npmDownloader.ts      # npm tarball download + gzip decompression + tar extraction
 │   ├── providers/
 │   │   ├── types.ts              # Provider protocol: ChatRuntime, ProviderCapabilities, StreamChunk
 │   │   └── ProviderRegistry.ts   # Static registry for AI provider registration/lookup
@@ -343,7 +354,7 @@ styles.css                             # Global styles (brand theme, light/dark)
 User Input → KiloCodeView
   → PlanModeController (inject mode prefix)
   → ConversationService (persist user message)
-  → KiloCodeChatRuntime (JSON-RPC over stdio → CLI)
+  → KiloCodeChatRuntime (HTTP serve → CLI via Node.js http module)
   → AsyncGenerator<StreamChunk>
   → StreamController (consume chunks, assemble Message)
   → MessageRenderer (incremental UI updates)
@@ -356,9 +367,12 @@ User Input → KiloCodeView
 
 | Component | Description |
 |-----------|-------------|
+| **BinaryManager** | CLI binary lifecycle manager — discovers existing CLI (user path → system PATH → local cache), auto-downloads from npm when not found, handles version management and macOS quarantine |
+| **PlatformDetector** | Detects platform/arch/AVX2/musl and constructs npm package candidate list for binary download |
+| **npmDownloader** | Downloads npm tarballs, decompresses gzip, parses tar format to extract platform binary |
 | **ProviderRegistry** | Static registry managing AI provider registration. Providers self-register at plugin load. |
 | **ChatRuntime** (interface) | AsyncGenerator-based protocol (`sendMessage` returns `AsyncGenerator<StreamChunk>`). Supports `start/stop/cancel/resetSession/sendApproval`. |
-| **KiloCodeChatRuntime** | Concrete implementation — spawns CLI child process, communicates via JSON-RPC over stdio. Uses internal pendingChunks + resolveNext queue to bridge stdout events to generator consumption. |
+| **KiloCodeChatRuntime** | Concrete implementation — spawns `kilo serve` HTTP server, communicates via HTTP POST with SSE/ndjson streaming. Uses Node.js `http` module to bypass Electron renderer CORS restrictions (`app://obsidian.md` origin). |
 | **StreamController** | Consumes `AsyncGenerator<StreamChunk>`, handles text/tool_use/tool_result/error/done/approval_required chunk types. Supports AbortController-based cancellation. |
 | **ConversationService** | Full CRUD for conversations with Promise-queue concurrency protection. Stores sessions as JSON files in `.kilocode/sessions/`. Supports fork, rewind, compact, resume operations. |
 | **TabManager** | Manages multiple chat tabs (create/close/switch), persists tab state across sessions. |
@@ -375,7 +389,8 @@ User Input → KiloCodeView
 - **Promise queue**: `ConversationService` uses sequential Promise execution to prevent concurrent modification race conditions
 - **Virtual scrolling**: Auto-enabled when message list exceeds 50 items, only renders viewport-visible messages
 - **CustomEvent bubbling**: Components communicate via DOM CustomEvents for loose coupling
-- **Partial line buffering**: `KiloCodeChatRuntime` buffers incomplete stdout lines to prevent JSON parse failures
+- **Node.js `http` module (vs. `fetch`)**: `KiloCodeChatRuntime` uses Node.js `http` for HTTP requests instead of browser `fetch()`, because Electron's renderer process enforces CORS — the `app://obsidian.md` origin cannot access `http://127.0.0.1`. Node.js `http` runs entirely outside the browser security boundary, avoiding CORS entirely.
+- **Binary auto-download**: `BinaryManager` uses npm registry as primary source (no extra CI needed), falls back to user-configured mirror URL; lazy path resolution in `start()` keeps `createRuntime` synchronous
 
 ---
 
@@ -517,7 +532,8 @@ Adding a new language:
 - [x] i18n (English, Chinese)
 - [x] Virtual scrolling for large conversations
 - [x] Error handling with severity levels
-- [ ] Performance optimization for large vaults
+- [x] CLI binary auto-download (zero-config setup)
+- [x] Streaming performance optimization (rAF scroll throttle, debounced writes, SSE chunk merge)
 - [ ] Additional language support
 - [ ] Custom theme support
 - [ ] Plugin API for third-party extensions
@@ -532,9 +548,12 @@ Adding a new language:
 Error: KiloCode CLI not found
 ```
 
-1. Install KiloCode CLI: `npm install -g @kilocode/cli`
-2. Verify installation: `kilo --version`
-3. If still not found, set CLI path in Settings → General → CLI Path
+The plugin automatically downloads the CLI on first use. If auto-download fails:
+
+1. Check your internet connection
+2. Try setting a mirror URL in Settings → General → Download Mirror URL
+3. Or install manually: `npm install -g @kilocode/cli`
+4. Verify installation: `kilo --version`
 
 ### CLI Path Issues
 
