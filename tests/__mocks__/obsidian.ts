@@ -11,4 +11,5 @@ module.exports = {
   PluginSettingTab: class PluginSettingTab {},
   ItemView: class ItemView {},
   WorkspaceLeaf: class WorkspaceLeaf {},
+  requestUrl: jest.fn(),
 };
