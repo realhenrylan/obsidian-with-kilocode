@@ -4,6 +4,7 @@ import type { ApprovalRequest, ApprovalDecision } from '../../../core/security/A
 
 export interface StreamCallbacks {
   onText?: (text: string) => void;
+  onThinking?: (text: string) => void;
   onToolCall?: (toolCall: ToolCallInfo) => void;
   onToolResult?: (toolCallId: string, result: string) => void;
   onError?: (error: string) => void;
@@ -14,10 +15,12 @@ export interface StreamCallbacks {
 /**
  * 流式响应控制器
  * 通过 for await 消费 AsyncGenerator<StreamChunk>，组装完整 Message
+ * 支持 thinking/reasoning 文本分离和 streamGeneration 冲突保护
  */
 export class StreamController {
   private abortController: AbortController | null = null;
   private onApprovalDecision: ((toolName: string, decision: string) => void) | null = null;
+  private currentGeneration: number = 0;
 
   /** 设置审批决定回调（用于通知 runtime） */
   setApprovalDecisionCallback(callback: (toolName: string, decision: string) => void): void {
@@ -26,12 +29,15 @@ export class StreamController {
 
   /**
    * 消费 AsyncGenerator 流式响应，返回组装好的 Message
+   * @param generation 当前流的代数，用于冲突保护
    */
   async consumeStream(
     generator: AsyncGenerator<StreamChunk>,
     callbacks: StreamCallbacks,
+    generation: number = 0,
   ): Promise<Message> {
     this.abortController = new AbortController();
+    this.currentGeneration = generation;
 
     const message: Message = {
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -39,13 +45,21 @@ export class StreamController {
       content: '',
       timestamp: Date.now(),
       toolCalls: [],
+      thinking: '',
     };
 
     try {
       for await (const chunk of generator) {
+        // 冲突保护：代数不匹配时跳过旧流
+        if (generation !== 0 && generation !== this.currentGeneration) break;
         if (this.abortController.signal.aborted) break;
 
         switch (chunk.type) {
+          case 'thinking':
+            message.thinking = (message.thinking || '') + (chunk.content || '');
+            callbacks.onThinking?.(chunk.content || '');
+            break;
+
           case 'text':
             message.content += chunk.content || '';
             callbacks.onText?.(chunk.content || '');
