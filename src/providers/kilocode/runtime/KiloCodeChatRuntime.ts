@@ -1,25 +1,50 @@
 import type { ChatRuntime, MessageContext, StreamChunk } from '../../../core/providers/types';
 import type { BinaryManager } from '../../../core/binary/BinaryManager';
 import type { KiloCodeSettings } from '../../../core/types';
-import { spawn, type ChildProcess } from 'child_process';
+import { execFile, spawn, type ChildProcess } from 'child_process';
+import { randomBytes } from 'crypto';
+import http from 'http';
+
+interface KiloModel {
+  providerID: string;
+  modelID: string;
+}
+
+interface ProviderListResponse {
+  all?: Array<{
+    id: string;
+    models?: Record<string, unknown>;
+  }>;
+}
+
+const SERVER_READY_TIMEOUT_MS = 10000;
+const PORT_DISCOVERY_DELAY_MS = 1500;
+const DEFAULT_AGENT = 'code';
+const DEFAULT_PROVIDER = 'anthropic';
 
 /**
  * KiloCode Chat Runtime
- * 通过 JSON-RPC over stdio 与 KiloCode CLI 通信
- * 使用 AsyncGenerator 模式：sendMessage 返回生成器，stdout 推数据到队列，生成器拉取
+ *
+ * Uses `kilo serve` as the persistent transport and sends prompts through the
+ * local HTTP API. The CLI server is protected with a per-runtime Basic Auth
+ * password via KILO_SERVER_PASSWORD.
  */
+interface ExtractedContent {
+  thinking: string[];
+  text: string[];
+}
+
 export class KiloCodeChatRuntime implements ChatRuntime {
-  private process: ChildProcess | null = null;
   private binaryManager: BinaryManager;
   private settings: KiloCodeSettings;
-  private stdoutBuffer = '';
+  private currentProcess: ChildProcess | null = null;
+  private startPromise: Promise<void> | null = null;
+  private serverBaseUrl: string | null = null;
+  private serverPassword: string | null = null;
+  private sessionId: string | null = null;
   private streaming = false;
-
-  // AsyncGenerator 内部队列机制
-  private pendingChunks: StreamChunk[] = [];
-  private resolveNext: ((value: IteratorResult<StreamChunk>) => void) | null = null;
-  private done = false;
-  private streamError: Error | null = null;
+  private abortController: AbortController | null = null;
+  private providerCache: ProviderListResponse | null = null;
 
   constructor(binaryManager: BinaryManager, settings: KiloCodeSettings) {
     this.binaryManager = binaryManager;
@@ -27,192 +52,615 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   }
 
   async start(): Promise<void> {
-    if (this.process) return;
+    if (this.serverBaseUrl && this.currentProcess && !this.currentProcess.killed) return;
+    if (this.startPromise) return this.startPromise;
 
-    const cliPath = await this.binaryManager.getBinaryPath(this.settings);
-
-    return new Promise((resolve, reject) => {
-      try {
-        this.process = spawn(cliPath, ['--mode', 'json-rpc'], {
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-
-        this.process.stdout?.on('data', (data: Buffer) => {
-          this.handleStdout(data.toString());
-        });
-
-        this.process.stderr?.on('data', (data: Buffer) => {
-          console.error('[KiloCode] stderr:', data.toString());
-        });
-
-        this.process.on('error', (error) => {
-          this.streamError = error;
-          this.resolvePending(error);
-          reject(error);
-        });
-
-        this.process.on('exit', (code) => {
-          if (code !== 0 && code !== null) {
-            const err = new Error(`KiloCode CLI exited with code ${code}`);
-            this.streamError = err;
-            this.resolvePending(err);
-          }
-        });
-
-        setTimeout(() => resolve(), 100);
-      } catch (error) {
-        reject(new Error(`Failed to start KiloCode CLI: ${error}`));
-      }
-    });
+    console.log('[KiloCodeChatRuntime] Starting kilo serve...');
+    this.startPromise = this.startServer();
+    try {
+      await this.startPromise;
+      console.log('[KiloCodeChatRuntime] kilo serve ready at', this.serverBaseUrl, 'session:', this.sessionId);
+    } catch (err) {
+      console.error('[KiloCodeChatRuntime] Failed to start kilo serve:', err);
+      throw err;
+    } finally {
+      this.startPromise = null;
+    }
   }
 
   async stop(): Promise<void> {
-    if (this.process) {
-      this.process.kill();
-      this.process = null;
-    }
-    this.resetInternalState();
+    this.abortController?.abort();
+    this.killProcess();
+    this.resetServerState();
   }
 
   async *sendMessage(content: string, context?: MessageContext): AsyncGenerator<StreamChunk> {
-    if (!this.process || !this.process.stdin) {
-      throw new Error('Runtime not started');
+    await this.start();
+
+    if (!this.serverBaseUrl || !this.sessionId) {
+      console.error('[KiloCodeChatRuntime] Not ready — serverBaseUrl:', this.serverBaseUrl, 'sessionId:', this.sessionId);
+      yield { type: 'error', error: 'KiloCode server is not ready' };
+      yield { type: 'done' };
+      return;
     }
 
-    this.resetInternalState();
     this.streaming = true;
-
-    const request = {
-      jsonrpc: '2.0',
-      method: 'sendMessage',
-      params: { content, context: context || {} },
-      id: Date.now(),
-    };
-    this.process.stdin.write(JSON.stringify(request) + '\n');
+    this.abortController = new AbortController();
 
     try {
-      while (true) {
-        const chunk = await this.nextChunk();
-        if (!chunk) break;
+      const payload = await this.buildMessagePayload(content);
+      const response = await this.request(`/session/${encodeURIComponent(this.sessionId)}/message`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: this.abortController.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        console.error('[KiloCodeChatRuntime] HTTP error:', response.status, errorText.slice(0, 200));
+        yield {
+          type: 'error',
+          error: `KiloCode HTTP API returned ${response.status}${errorText ? `: ${errorText}` : ''}`,
+        };
+        yield { type: 'done' };
+        return;
+      }
+
+      const contentType = response.headers.get('content-type') ?? '';
+      console.log('[KiloCodeChatRuntime] Response OK — status:', response.status, 'content-type:', contentType);
+
+      let emitted = false;
+      for await (const chunk of this.parseResponse(response)) {
+        console.log('[KiloCodeChatRuntime] Chunk:', JSON.stringify(chunk).slice(0, 200));
+        emitted = true;
         yield chunk;
       }
+
+      console.log('[KiloCodeChatRuntime] Stream done. emitted:', emitted, 'status:', response.status);
+      yield { type: 'done' };
+    } catch (error) {
+      if (!this.abortController?.signal.aborted) {
+        yield { type: 'error', error: error instanceof Error ? error.message : String(error) };
+      }
+      yield { type: 'done' };
     } finally {
       this.streaming = false;
+      this.abortController = null;
     }
   }
 
   cancel(): void {
-    if (this.process && this.process.stdin) {
-      const cancelRequest = {
-        jsonrpc: '2.0',
-        method: 'cancel',
-        id: Date.now(),
-      };
-      this.process.stdin.write(JSON.stringify(cancelRequest) + '\n');
-    }
-    this.done = true;
+    this.abortController?.abort();
+    this.killProcess();
+    this.resetServerState();
     this.streaming = false;
-    this.resolveNext?.({ value: undefined as unknown as StreamChunk, done: true });
-    this.resolveNext = null;
   }
 
   resetSession(): void {
-    if (this.process && this.process.stdin) {
-      const resetRequest = {
-        jsonrpc: '2.0',
-        method: 'resetSession',
-        id: Date.now(),
-      };
-      this.process.stdin.write(JSON.stringify(resetRequest) + '\n');
-    }
-    this.resetInternalState();
+    this.sessionId = null;
   }
 
   isStreaming(): boolean {
     return this.streaming;
   }
 
-  sendApproval(toolName: string, decision: 'allow' | 'deny'): void {
-    if (!this.process || !this.process.stdin) return;
-    const request = {
-      jsonrpc: '2.0',
-      method: 'approval',
-      params: { toolName, decision },
-      id: Date.now(),
-    };
-    this.process.stdin.write(JSON.stringify(request) + '\n');
+  sendApproval(): void {}
+
+  private async startServer(): Promise<void> {
+    const cliPath = await this.binaryManager.getBinaryPath(this.settings);
+    console.log('[KiloCodeChatRuntime] Binary path:', cliPath);
+    this.serverPassword = this.generatePassword();
+    this.providerCache = null;
+
+    const env = this.buildEnv(this.serverPassword);
+    console.log('[KiloCodeChatRuntime] Spawning:', cliPath, 'serve --port 0');
+    this.currentProcess = spawn(cliPath, ['serve', '--port', '0'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env,
+    });
+
+    this.currentProcess.on('error', (err) => {
+      console.error('[KiloCodeChatRuntime] Process error event:', err);
+    });
+    this.currentProcess.on('exit', (code, signal) => {
+      console.warn('[KiloCodeChatRuntime] Process exited:', { code, signal });
+    });
+    this.currentProcess.stderr?.on('data', (data: Buffer) => {
+      console.warn('[KiloCodeChatRuntime] stderr:', data.toString());
+    });
+
+    console.log('[KiloCodeChatRuntime] Waiting for server port...');
+    const port = await this.waitForServerPort(this.currentProcess);
+    console.log('[KiloCodeChatRuntime] Got port:', port);
+    this.serverBaseUrl = `http://127.0.0.1:${port}`;
+    await this.waitForHttpReady();
+    console.log('[KiloCodeChatRuntime] HTTP API ready');
+    this.sessionId = await this.createSession();
+    console.log('[KiloCodeChatRuntime] Session created:', this.sessionId);
   }
 
-  private resetInternalState(): void {
-    this.pendingChunks = [];
-    this.resolveNext = null;
-    this.done = false;
-    this.streamError = null;
-    this.stdoutBuffer = '';
-  }
+  private waitForServerPort(proc: ChildProcess): Promise<number> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let output = '';
+      let discoveryTimer: ReturnType<typeof setTimeout> | null = null;
+      let startupTimer: ReturnType<typeof setTimeout> | null = null;
 
-  private nextChunk(): Promise<StreamChunk | null> {
-    if (this.pendingChunks.length > 0) {
-      return Promise.resolve(this.pendingChunks.shift()!);
-    }
-    if (this.done) return Promise.resolve(null);
-    if (this.streamError) throw this.streamError;
-
-    return new Promise((resolve) => {
-      this.resolveNext = (result) => {
-        if (result.done) {
-          resolve(null);
-          return;
-        }
-        resolve(result.value);
+      const cleanup = () => {
+        if (discoveryTimer) clearTimeout(discoveryTimer);
+        if (startupTimer) clearTimeout(startupTimer);
+        proc.stdout?.off('data', onData);
+        proc.stderr?.off('data', onData);
+        proc.off('error', onError);
+        proc.off('exit', onExit);
       };
+
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        fn();
+      };
+
+      const onData = (data: Buffer) => {
+        output += data.toString();
+        const port = this.parsePort(output);
+        if (port) settle(() => resolve(port));
+      };
+
+      const onError = (error: Error) => {
+        settle(() => reject(error));
+      };
+
+      const onExit = (code: number | null) => {
+        settle(() => reject(new Error(`kilo serve exited before startup completed${code === null ? '' : ` with code ${code}`}`)));
+      };
+
+      proc.stdout?.on('data', onData);
+      proc.stderr?.on('data', onData);
+      proc.on('error', onError);
+      proc.on('exit', onExit);
+
+      discoveryTimer = setTimeout(() => {
+        this.discoverListeningPort(proc.pid)
+          .then((port) => {
+            if (port) settle(() => resolve(port));
+          })
+          .catch(() => {});
+      }, PORT_DISCOVERY_DELAY_MS);
+
+      startupTimer = setTimeout(() => {
+        settle(() => reject(new Error('Timed out waiting for kilo serve to report its listening port')));
+      }, SERVER_READY_TIMEOUT_MS);
     });
   }
 
-  /** 判断 chunk 是否为终止类型（done 或 error） */
-  private isTerminalChunk(chunk: StreamChunk): boolean {
-    return chunk.type === 'done' || chunk.type === 'error';
+  private parsePort(output: string): number | null {
+    const urlMatch = output.match(/https?:\/\/(?:\[[^\]]+\]|[^:\s]+):(\d+)/i);
+    if (urlMatch) return Number(urlMatch[1]);
+
+    const portMatch = output.match(/\bport\s+(\d+)\b/i);
+    return portMatch ? Number(portMatch[1]) : null;
   }
 
-  private handleStdout(data: string): void {
-    this.stdoutBuffer += data;
-    const lines = this.stdoutBuffer.split('\n');
-    this.stdoutBuffer = lines.pop() ?? '';
+  private async discoverListeningPort(pid?: number): Promise<number | null> {
+    if (!pid) return null;
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
+    if (process.platform === 'win32') {
+      const output = await this.execFileText('netstat.exe', ['-ano', '-p', 'tcp']);
+      for (const line of output.split(/\r?\n/)) {
+        if (!line.includes('LISTENING')) continue;
+        const columns = line.trim().split(/\s+/);
+        if (columns[columns.length - 1] !== String(pid)) continue;
+        const localAddress = columns[1] ?? '';
+        const port = Number(localAddress.match(/:(\d+)$/)?.[1]);
+        if (port) return port;
+      }
+      return null;
+    }
+
+    const output = await this.execFileText('lsof', ['-Pan', '-p', String(pid), '-iTCP', '-sTCP:LISTEN']);
+    for (const line of output.split(/\r?\n/)) {
+      const port = Number(line.match(/:(\d+)\s+\(LISTEN\)/)?.[1]);
+      if (port) return port;
+    }
+    return null;
+  }
+
+  private execFileText(command: string, args: string[]): Promise<string> {
+    return new Promise((resolve, reject) => {
+      execFile(command, args, { windowsHide: true }, (error, stdout, stderr) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(`${stdout}${stderr}`);
+      });
+    });
+  }
+
+  private async waitForHttpReady(): Promise<void> {
+    const startedAt = Date.now();
+    let lastError: unknown;
+
+    while (Date.now() - startedAt < SERVER_READY_TIMEOUT_MS) {
       try {
-        const chunk = JSON.parse(trimmed) as StreamChunk;
-        this.handleParsedChunk(chunk);
-      } catch {
-        // 非 JSON 输出，忽略
+        const response = await this.request('/session', { method: 'GET' });
+        if (response.ok) return;
+      } catch (error) {
+        lastError = error;
+      }
+      await this.delay(200);
+    }
+
+    throw new Error(`Timed out waiting for kilo HTTP API${lastError instanceof Error ? `: ${lastError.message}` : ''}`);
+  }
+
+  private async createSession(): Promise<string> {
+    const response = await this.request('/session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create KiloCode session: HTTP ${response.status}`);
+    }
+
+    const session = await response.json() as { id?: string; sessionId?: string };
+    const id = session.id ?? session.sessionId;
+    if (!id) throw new Error('KiloCode session response did not include an id');
+    return id;
+  }
+
+  private async buildMessagePayload(content: string): Promise<Record<string, unknown>> {
+    const model = await this.resolveModel();
+
+    const payload: Record<string, unknown> = {
+      messageID: this.makeId('msg'),
+      modelID: model.modelID,
+      agent: this.resolveAgent(),
+      parts: [{ type: 'text', text: content }],
+    };
+
+    // 只在用户显式指定 provider/model 格式时才发送 providerID，
+    // 否则让服务器根据 modelID 自行路由到正确的 provider
+    if (model.providerID) {
+      payload.providerID = model.providerID;
+      payload.model = model;
+    }
+
+    return payload;
+  }
+
+  private async resolveModel(): Promise<KiloModel> {
+    const configuredModel = (this.settings.defaultModel || this.settings.model || '').trim();
+    const parsed = this.parseConfiguredModel(configuredModel);
+    if (parsed) return parsed;
+
+    // 没有显式指定 provider，只返回 modelID，让服务器路由
+    return {
+      providerID: '',
+      modelID: configuredModel || 'claude-sonnet-4-20250514',
+    };
+  }
+
+  private parseConfiguredModel(model: string): KiloModel | null {
+    const match = model.match(/^(anthropic|openai|google|groq|kilo|apertis|helicone)\/(.+)$/);
+    if (!match) return null;
+    return {
+      providerID: match[1],
+      modelID: match[2],
+    };
+  }
+
+  private async findProviderForModel(modelID: string): Promise<KiloModel | null> {
+    if (!modelID) return null;
+
+    try {
+      if (!this.providerCache) {
+        const response = await this.request('/provider', { method: 'GET' });
+        if (!response.ok) return null;
+        this.providerCache = await response.json() as ProviderListResponse;
+      }
+
+      for (const provider of this.providerCache.all ?? []) {
+        if (provider.models && Object.prototype.hasOwnProperty.call(provider.models, modelID)) {
+          return {
+            providerID: provider.id,
+            modelID,
+          };
+        }
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
+  }
+
+  private resolveAgent(): string {
+    if (this.settings.permissionMode === 'plan') return 'plan';
+    return DEFAULT_AGENT;
+  }
+
+  private async *parseResponse(response: Response): AsyncGenerator<StreamChunk> {
+    const contentType = response.headers.get('content-type') ?? '';
+    console.log('[KiloCodeChatRuntime] parseResponse — content-type:', contentType, 'has body:', !!response.body);
+
+    if (response.body && contentType.includes('text/event-stream')) {
+      console.log('[KiloCodeChatRuntime] Parsing as SSE stream');
+      yield* this.parseEventStream(response.body);
+      return;
+    }
+
+    const bodyText = await response.text();
+    console.log('[KiloCodeChatRuntime] Non-stream body:', bodyText.slice(0, 500));
+    if (!bodyText.trim()) return;
+
+    try {
+      const json = JSON.parse(bodyText);
+      const extracted = this.extractThinkingAndText(json);
+      console.log('[KiloCodeChatRuntime] Extracted — thinking:', extracted.thinking.length, 'text:', extracted.text.length);
+      for (const t of extracted.thinking) {
+        yield { type: 'thinking', content: t };
+      }
+      for (const t of extracted.text) {
+        yield { type: 'text', content: t };
+      }
+    } catch {
+      yield { type: 'text', content: bodyText };
+    }
+  }
+
+  private async *parseEventStream(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamChunk> {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() ?? '';
+
+      for (const event of events) {
+        const dataLines = event
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trim());
+
+        for (const data of dataLines) {
+          if (!data || data === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(data);
+            const extracted = this.extractThinkingAndText(parsed);
+            for (const t of extracted.thinking) {
+              yield { type: 'thinking', content: t };
+            }
+            for (const t of extracted.text) {
+              yield { type: 'text', content: t };
+            }
+          } catch {
+            yield { type: 'text', content: data };
+          }
+        }
       }
     }
   }
 
-  private handleParsedChunk(chunk: StreamChunk): void {
-    if (this.isTerminalChunk(chunk)) {
-      this.done = true;
-      this.streaming = false;
+  private extractText(value: unknown): string[] {
+    if (value === null || value === undefined) return [];
+    if (typeof value === 'string') return value ? [value] : [];
+    if (typeof value !== 'object') return [];
+
+    if (Array.isArray(value)) {
+      const results: string[] = [];
+      for (const item of value) {
+        results.push(...this.extractText(item));
+      }
+      return results;
     }
 
-    if (this.resolveNext) {
-      const resolve = this.resolveNext;
-      this.resolveNext = null;
-      resolve({ value: chunk, done: false });
-    } else {
-      this.pendingChunks.push(chunk);
+    const record = value as Record<string, unknown>;
+    if (record.type === 'text' && typeof record.text === 'string') {
+      return [record.text];
+    }
+    if (typeof record.content === 'string') {
+      return [record.content];
+    }
+    if (typeof record.text === 'string') {
+      return [record.text];
+    }
+    if (Array.isArray(record.parts)) {
+      return this.extractText(record.parts);
+    }
+    if (record.message) {
+      return this.extractText(record.message);
+    }
+    if (record.data) {
+      return this.extractText(record.data);
+    }
+    return [];
+  }
+
+  private extractThinkingAndText(value: unknown): ExtractedContent {
+    const result: ExtractedContent = { thinking: [], text: [] };
+    this.collectThinkingAndText(value, result);
+    return result;
+  }
+
+  private collectThinkingAndText(value: unknown, result: ExtractedContent): void {
+    if (value === null || value === undefined) return;
+
+    if (typeof value === 'string') {
+      if (value) result.text.push(value);
+      return;
+    }
+
+    if (typeof value !== 'object') return;
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        this.collectThinkingAndText(item, result);
+      }
+      return;
+    }
+
+    const record = value as Record<string, unknown>;
+
+    if (record.type === 'thinking' && typeof record.text === 'string') {
+      result.thinking.push(record.text);
+      return;
+    }
+    if (record.type === 'text' && typeof record.text === 'string') {
+      result.text.push(record.text);
+      return;
+    }
+
+    if (Array.isArray(record.parts)) {
+      this.collectThinkingAndText(record.parts, result);
+      return;
+    }
+
+    if (typeof record.text === 'string' && record.text) {
+      result.text.push(record.text);
+    } else if (typeof record.content === 'string' && record.content) {
+      result.text.push(record.content);
     }
   }
 
-  private resolvePending(error: Error): void {
-    if (this.resolveNext) {
-      const resolve = this.resolveNext;
-      this.resolveNext = null;
-      resolve({ value: undefined as unknown as StreamChunk, done: true });
+  /**
+   * 使用 Node.js http 模块发送 HTTP 请求。
+   * 浏览器 fetch() 在 Electron renderer 进程中受 CORS 限制，
+   * 而 Node.js http 模块不受此限制。
+   */
+  private request(path: string, init: RequestInit = {}): Promise<Response> {
+    if (!this.serverBaseUrl) throw new Error('KiloCode server URL is not available');
+
+    return new Promise((resolve, reject) => {
+      const url = new URL(path, this.serverBaseUrl);
+      const method = (init.method || 'GET') as string;
+
+      // 从 init.headers 提取键值对
+      const headers: Record<string, string> = {};
+      if (init.headers instanceof Headers) {
+        init.headers.forEach((value, key) => { headers[key] = value; });
+      } else if (init.headers && typeof init.headers === 'object') {
+        for (const [key, value] of Object.entries(init.headers)) {
+          if (typeof value === 'string') headers[key] = value;
+        }
+      }
+      headers['Authorization'] = this.basicAuthHeader();
+
+      const req = http.request({
+        hostname: url.hostname,
+        port: Number(url.port),
+        path: url.pathname + url.search,
+        method,
+        headers,
+      }, (res) => {
+        // 将 Node.js headers 转为 plain object（合并多值 header）
+        const resHeaders: Record<string, string> = {};
+        for (const [key, value] of Object.entries(res.headers)) {
+          if (typeof value === 'string') resHeaders[key] = value;
+          else if (Array.isArray(value)) resHeaders[key] = value.join(', ');
+        }
+
+        const contentType = res.headers['content-type'] ?? '';
+
+        if (contentType.includes('text/event-stream')) {
+          // SSE 流式：将 Node.js IncomingMessage 包装为 Web ReadableStream
+          const readable = new ReadableStream({
+            start(controller) {
+              res.on('data', (chunk: Buffer) => {
+                controller.enqueue(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+              });
+              res.on('end', () => controller.close());
+              res.on('error', (err) => controller.error(err));
+            },
+          });
+          resolve(new Response(readable, { status: res.statusCode ?? 0, headers: resHeaders }));
+        } else {
+          // 非流式：收集完整 body
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('end', () => {
+            const body = Buffer.concat(chunks).toString('utf-8');
+            resolve(new Response(body, { status: res.statusCode ?? 0, headers: resHeaders }));
+          });
+          res.on('error', reject);
+        }
+      });
+
+      req.on('error', reject);
+
+      // AbortController 信号：销毁请求
+      if (init.signal) {
+        if (init.signal.aborted) {
+          req.destroy();
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+          return;
+        }
+        init.signal.addEventListener('abort', () => req.destroy(), { once: true });
+      }
+
+      if (init.body && typeof init.body === 'string') {
+        req.write(init.body);
+      }
+      req.end();
+    });
+  }
+
+  private basicAuthHeader(): string {
+    if (!this.serverPassword) throw new Error('KiloCode server password is not available');
+    return `Basic ${Buffer.from(`kilo:${this.serverPassword}`).toString('base64')}`;
+  }
+
+  private buildEnv(serverPassword: string): Record<string, string> {
+    const env: Record<string, string> = { ...(process.env as Record<string, string>) };
+    env.KILO_SERVER_PASSWORD = serverPassword;
+
+    if (this.settings.apiKey) {
+      env.KILO_API_KEY = this.settings.apiKey;
     }
-    this.done = true;
-    this.streaming = false;
+    if (this.settings.environmentVariables?.['KILO_BASE_URL']) {
+      env.KILO_BASE_URL = this.settings.environmentVariables['KILO_BASE_URL'];
+    }
+    return env;
+  }
+
+  private killProcess(): void {
+    if (this.currentProcess && !this.currentProcess.killed) {
+      this.currentProcess.kill();
+    }
+    this.currentProcess = null;
+  }
+
+  private resetServerState(): void {
+    this.startPromise = null;
+    this.serverBaseUrl = null;
+    this.serverPassword = null;
+    this.sessionId = null;
+    this.providerCache = null;
+  }
+
+  private makeId(prefix: string): string {
+    return `${prefix}_${Date.now().toString(36)}${randomBytes(6).toString('hex')}`;
+  }
+
+  private generatePassword(): string {
+    return randomBytes(24).toString('base64url');
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
