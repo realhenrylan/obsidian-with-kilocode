@@ -6,17 +6,25 @@ import type { KiloCodeSettings } from './core/types';
 import { KiloCodeView } from './features/chat/KiloCodeView';
 import { DEFAULT_SETTINGS } from './app/settings/defaultSettings';
 import { ProviderRegistry } from './core/providers/ProviderRegistry';
-import { kilocodeProviderRegistration } from './providers/kilocode/registration';
+import { createKilocodeRegistration } from './providers/kilocode/registration';
+import { BinaryManager } from './core/binary/BinaryManager';
 import { KiloCodeSettingTab } from './features/settings/SettingsTab';
 
 export default class KiloCodePlugin extends Plugin {
   settings: KiloCodeSettings = DEFAULT_SETTINGS;
+  binaryManager!: BinaryManager;
 
   async onload() {
     await this.loadSettings();
 
+    // 创建 BinaryManager 并后台预加载二进制
+    this.binaryManager = new BinaryManager(this.manifest.dir ?? '');
+    this.binaryManager.preload(this.settings).catch(err => {
+      console.error('[KiloCode] Binary preload failed:', err);
+    });
+
     // 注册 Provider
-    ProviderRegistry.register(kilocodeProviderRegistration);
+    ProviderRegistry.register(createKilocodeRegistration(this.binaryManager));
 
     // 注册视图
     this.registerView(
