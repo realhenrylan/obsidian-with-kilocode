@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+
+- **PlatformDetector**: 平台/架构/AVX2/musl 检测模块，移植自 @kilocode/cli 的 bin/kilo 脚本；`detectPlatform()` 返回平台信息及 npm 包名候选列表，`supportsAvx2()` 检测 AVX2 指令集支持，`isMusl()` 检测 musl libc 环境
+
 ## [0.6.1] - 2026-05-21
 
 ### Changed
