@@ -6,11 +6,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **KiloCodeChatRuntime**: 重写通信层 — 废弃 `kilo run <message>` 子进程模式，改为 `kilo serve` HTTP 模式。`start()` spawn HTTP server 进程，`sendMessage()` 通过 HTTP POST 发送消息并处理 SSE/ndjson 流式响应，`stop()` kill 进程
+- **KiloCodeChatRuntime**: HTTP 请求改用 Node.js `http` 模块 — 浏览器 `fetch()` 在 Electron renderer 进程中受 CORS 限制（`app://obsidian.md` origin 无法访问 `http://127.0.0.1`），Node.js HTTP 完全绕过此限制
+- **KiloCodeView**: 重构为 claudian 架构 — DOM 骨架只在 `onOpen()` 创建一次，通过 `updateUI()` 更新内容，解决 textarea 事件监听器丢失和消息 DOM 被销毁的问题
+
+### Fixed
+
+- **Thinking/Reasoning 文本与正常回答分离** — DeepSeek R1 等模型的推理过程（`parts[].type === "thinking"`）不再混入回答显示，通过 `extractThinkingAndText()` 按 `type` 字段区分
+- **流式响应实时渲染** — 用户发送消息后可看到逐步生成的文本，替代之前的"等待完成后一次性渲染"
+- **streamGeneration 冲突保护** — 快速连发消息时旧流不会覆盖新流，通过 `TabState.streamGeneration` 代数匹配机制实现
+- **KiloCodeView**: 修复无法发送第二条消息 — 根因是 `render()` 每次调用 `container.empty()` 销毁 DOM，导致 textarea 的 `registerDomEvent` 事件监听器丢失。现在 textarea 和所有事件监听器只注册一次
+- **KiloCodeView**: 修复切换会话时消息消失 — 根因是 `render()` 销毁消息 DOM 后 `renderConversationMessages` 未正确调用。现在通过 `handleTabClick()` → `loadConversationMessages()` 正确加载消息
+- **KiloCodeView**: 修复重启 Obsidian 后首个会话无法发送 — 根因是 `render()` 在 `onOpen()` 时被调用但会话尚未初始化。现在 `buildLayout()` 只创建骨架，消息加载异步进行
+- **KiloCodeView**: 修复流式响应串台到其他标签页 — 添加 `senderTabId` 跟踪发送者标签，流式进行中阻止切换标签，渲染前校验当前标签是否为发送者
+- **KiloCodeView**: 修复聊天发送消息时 "Runtime not started" 错误 — `getOrCreateRuntime()` 改为 async 等待 `start()` 完成后再返回 runtime
+- **CORS**: 修复 Obsidian 插件无法访问 `kilo serve` HTTP API 的 CORS 策略错误
+
 ### Added
 
-- **npmDownloader**: npm tarball 下载 + gzip 解压 + tar 解析，提取平台二进制；`buildTarballUrl()` 构造 registry 下载链接，`extractBinaryFromTarball()` 从 tar buffer 提取目标文件，`downloadBinary()` 端到端下载流程
-- **PlatformDetector**: 平台/架构/AVX2/musl 检测模块，移植自 @kilocode/cli 的 bin/kilo 脚本；`detectPlatform()` 返回平台信息及 npm 包名候选列表，`supportsAvx2()` 检测 AVX2 指令集支持，`isMusl()` 检测 musl libc 环境
-- **BinaryManager**: CLI 二进制生命周期管理；`getBinaryPath()` 按优先级链发现二进制（用户配置 → 系统 PATH → 本地缓存 → 自动下载），`preload()` 异步预加载不阻塞 UI，版本文件管理（`.version`），下载降级链支持多 npm 包名 + 镜像源回退，macOS 隔离属性自动清除
+- **StreamChunkType**: 新增 `'thinking'` 类型，支持 thinking/reasoning 文本与普通文本分离
+- **Message**: 新增 `thinking?: string` 字段，持久化 thinking/reasoning 内容
+- **TabState**: 新增 `streamGeneration: number` 字段和 `bumpStreamGeneration()` 方法，用于流式冲突保护
+- **KiloCodeChatRuntime**: `extractThinkingAndText()` 方法 — 递归遍历 JSON 结构，按 `parts[].type` 字段区分 thinking 和 text
+- **StreamController**: `onThinking` 回调 + `generation` 参数 — 支持 thinking chunk 处理和 streamGeneration 冲突保护
+- **MessageRenderer**: 流式增量渲染 — `addAssistantMessage()` 创建空容器、`appendText()` 增量文本追加（textContent 避免高频 Markdown 渲染）、`appendThinking()` 创建/更新 thinking block、`finalizeMessage()` 流结束后最终 Markdown 渲染
+- **MessageRenderer**: thinking block 折叠显示 — 流式阶段 `<details>` 展开显示、历史消息 `<details>` 折叠显示并标注字符数
+- **SettingsTab**: 新增 API Configuration 区域 — API Key（密码输入框）和 Base URL 配置项
+- **KiloCodeChatRuntime**: 环境变量注入 — `apiKey` → `KILO_API_KEY`，`baseUrl` → `KILO_BASE_URL`，`vaultPath` → `cwd`
+- **registration**: `createKilocodeRegistration()` 接受 settings getter，确保 runtime 使用最新的用户配置而非默认空值
+
+## [0.7.0] - 2026-05-21
+
+### Added
+
+- **BinaryManager**: CLI binary lifecycle manager — `getBinaryPath()` priority chain (user config → system PATH → local cache → auto-download), `preload()` async preloading without blocking UI, `.version` file management, download fallback chain with multiple npm package names + mirror URL support, macOS quarantine attribute auto-removal
+- **PlatformDetector**: Platform/arch/AVX2/musl detection module ported from @kilocode/cli's bin/kilo script — `detectPlatform()` returns platform info and npm package candidate list, `supportsAvx2()` detects AVX2 instruction set support, `isMusl()` detects musl libc environment
+- **npmDownloader**: npm tarball download + gzip decompression + tar parsing for binary extraction — `buildTarballUrl()` constructs registry download URLs, `extractBinaryFromTarball()` extracts target file from tar buffer, `downloadBinary()` end-to-end download flow
+- **Settings extension**: `KiloCodeSettings` adds `mirrorUrl` field for custom binary download mirror URL
+- **SettingsTab**: "Download Mirror URL" setting for configuring custom binary download source
+
+### Changed
+
+- **KiloCodeChatRuntime**: Constructor changed to `(binaryManager, settings)`, `start()` calls `binaryManager.getBinaryPath(settings)` for lazy CLI path resolution
+- **registration.ts**: Refactored to factory function `createKilocodeRegistration(binaryManager)` accepting BinaryManager dependency
+- **main.ts**: Creates BinaryManager in `onload()`, calls `preload()` in background, passes to provider registration
+- **README.md**: Removed manual CLI install prerequisite, added auto-download feature documentation, updated architecture and settings sections
+- **README_CN.md**: Synced with English version changes
+
+### Fixed
+
+- **KiloCodeView**: Fixed "Runtime not started" error when sending messages — `getOrCreateRuntime()` now awaits `start()` completion before returning runtime
 
 ## [0.6.1] - 2026-05-21
 
