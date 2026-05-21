@@ -290,4 +290,101 @@ describe('StreamController', () => {
       expect(message.content).toBe('Start.\n');
     });
   });
+
+  describe('consumeStream — thinking 文本处理', () => {
+    test('thinking chunk 累积到 message.thinking 并调用 onThinking 回调', async () => {
+      const onThinking = jest.fn();
+      const onText = jest.fn();
+
+      const generator = mockGenerator([
+        { type: 'thinking', content: '让我分析一下...' },
+        { type: 'thinking', content: '\n需要考虑...' },
+        { type: 'text', content: '最终回答' },
+        { type: 'done' },
+      ]);
+
+      const message = await controller.consumeStream(generator, { onThinking, onText });
+
+      expect(message.thinking).toBe('让我分析一下...\n需要考虑...');
+      expect(message.content).toBe('最终回答');
+      expect(onThinking).toHaveBeenCalledTimes(2);
+      expect(onThinking).toHaveBeenNthCalledWith(1, '让我分析一下...');
+      expect(onThinking).toHaveBeenNthCalledWith(2, '\n需要考虑...');
+      expect(onText).toHaveBeenCalledTimes(1);
+      expect(onText).toHaveBeenCalledWith('最终回答');
+    });
+
+    test('没有 thinking 时 thinking 字段应为空字符串', async () => {
+      const generator = mockGenerator([
+        { type: 'text', content: '直接回答' },
+        { type: 'done' },
+      ]);
+
+      const message = await controller.consumeStream(generator, {});
+
+      expect(message.thinking).toBe('');
+      expect(message.content).toBe('直接回答');
+    });
+  });
+
+  describe('consumeStream — streamGeneration 冲突保护', () => {
+    test('generation=0 时不启用保护，正常处理所有 chunk', async () => {
+      const generator = mockGenerator([
+        { type: 'text', content: '正常内容' },
+        { type: 'done' },
+      ]);
+
+      const message = await controller.consumeStream(generator, {}, 0);
+
+      expect(message.content).toBe('正常内容');
+    });
+
+    test('generation 匹配时正常处理 chunk', async () => {
+      const generator = mockGenerator([
+        { type: 'text', content: '正常内容' },
+        { type: 'done' },
+      ]);
+
+      const message = await controller.consumeStream(generator, {}, 1);
+
+      expect(message.content).toBe('正常内容');
+    });
+
+    test('代数不匹配时旧流被截断', async () => {
+      const onTextOld = jest.fn();
+      const onTextNew = jest.fn();
+
+      // 模拟并发场景：旧流有延迟，新流在旧流完成前启动
+      async function* slowOldStream(): AsyncGenerator<StreamChunk> {
+        yield { type: 'text', content: 'old-start' };
+        // 等待足够长，让新流的 consumeStream 调用覆盖 currentGeneration
+        await new Promise(resolve => setTimeout(resolve, 50));
+        yield { type: 'text', content: 'old-end' };
+        yield { type: 'done' };
+      }
+
+      async function* newStream(): AsyncGenerator<StreamChunk> {
+        yield { type: 'text', content: 'new' };
+        yield { type: 'done' };
+      }
+
+      // 启动旧流（generation=1），但不等待完成
+      const oldPromise = controller.consumeStream(slowOldStream(), { onText: onTextOld }, 1);
+
+      // 等旧流第一个 chunk 处理完
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(onTextOld).toHaveBeenCalledWith('old-start');
+
+      // 启动新流（generation=2），覆盖 currentGeneration
+      const newMessage = await controller.consumeStream(newStream(), { onText: onTextNew }, 2);
+      expect(newMessage.content).toBe('new');
+      expect(onTextNew).toHaveBeenCalledWith('new');
+
+      // 旧流继续执行，但因 currentGeneration 已变为 2，generation=1 不匹配
+      const oldMessage = await oldPromise;
+      expect(oldMessage.content).toBe('old-start');
+      // old-end 应被跳过
+      expect(onTextOld).not.toHaveBeenCalledWith('old-end');
+    });
+  });
 });
