@@ -88,6 +88,8 @@ export interface KiloCodeSettings {
   compactKeepRecent: number;
   /** 权限模式：yolo（全自动）/ normal（逐次审批）/ plan（只读） */
   permissionMode: 'yolo' | 'normal' | 'plan';
+  /** 下载镜像源基础 URL。空字符串表示使用 npm 官方源。 */
+  mirrorUrl: string;
 }
 
 /** 视图类型常量 */

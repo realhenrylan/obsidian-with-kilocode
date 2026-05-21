@@ -19,6 +19,7 @@ export const DEFAULT_KILOCODE_SETTINGS: KiloCodeSettings = {
   fontSize: 14,
   compactKeepRecent: 5,
   permissionMode: 'normal',
+  mirrorUrl: '',
 };
 
 export function getKiloCodeSettings(settings: Record<string, unknown>): KiloCodeSettings {
