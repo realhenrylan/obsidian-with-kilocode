@@ -400,11 +400,23 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     }
 
     const bodyText = await response.text();
-    console.log('[KiloCodeChatRuntime] Non-stream body:', bodyText.slice(0, 500));
+    console.log('[KiloCodeChatRuntime] Non-stream body (len):', bodyText.length);
+    // 将完整响应写入临时文件用于调试 thinking 分离
+    try {
+      const fs = require('fs');
+      fs.writeFileSync('C:\\Users\\henry\\AppData\\Local\\Temp\\kilo-response-debug.json', bodyText);
+      console.log('[KiloCodeChatRuntime] Response written to temp file for analysis');
+    } catch (_e) { /* ignore */ }
     if (!bodyText.trim()) return;
 
     try {
       const json = JSON.parse(bodyText);
+      // 详细日志：输出每个 part 的结构，用于调试 thinking 分离
+      if (json.parts && Array.isArray(json.parts)) {
+        json.parts.forEach((p: any, i: number) => {
+          console.log(`[KiloCodeChatRuntime] Part[${i}]: type=${p.type}, keys=${Object.keys(p).join(',')}, text_len=${(p.text || '').length}, content_len=${(p.content || '').length}`);
+        });
+      }
       const extracted = this.extractThinkingAndText(json);
       console.log('[KiloCodeChatRuntime] Extracted — thinking:', extracted.thinking.length, 'text:', extracted.text.length);
       for (const t of extracted.thinking) {
@@ -516,10 +528,26 @@ export class KiloCodeChatRuntime implements ChatRuntime {
 
     const record = value as Record<string, unknown>;
 
+    // type === 'thinking' → thinking
     if (record.type === 'thinking' && typeof record.text === 'string') {
       result.thinking.push(record.text);
       return;
     }
+    // type === 'reasoning' → thinking（DeepSeek 等模型可能用 reasoning）
+    if (record.type === 'reasoning' && typeof record.text === 'string') {
+      result.thinking.push(record.text);
+      return;
+    }
+    // 有 reasoning_content 字段 → thinking 内容单独提取
+    if (typeof record.reasoning_content === 'string' && record.reasoning_content) {
+      result.thinking.push(record.reasoning_content);
+      // 如果同时有 text，继续处理 text
+      if (typeof record.text === 'string') {
+        result.text.push(record.text);
+      }
+      return;
+    }
+    // type === 'text' → text
     if (record.type === 'text' && typeof record.text === 'string') {
       result.text.push(record.text);
       return;

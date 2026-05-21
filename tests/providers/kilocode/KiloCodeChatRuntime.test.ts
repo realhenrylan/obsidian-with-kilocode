@@ -355,10 +355,38 @@ describe('KiloCodeChatRuntime', () => {
       expect(result.thinking).toEqual(['第一段推理', '第二段推理']);
       expect(result.text).toEqual(['第一段回答', '第二段回答']);
     });
+
+    test('kilo serve 实际格式：reasoning + step-start/step-finish', () => {
+      // 这是 kilo serve 返回的真实结构
+      const input = {
+        info: { id: 'msg_test', role: 'assistant' },
+        parts: [
+          { type: 'step-start', id: 'prt_1', sessionID: 'ses_test', messageID: 'msg_test' },
+          { type: 'reasoning', text: 'The user just wants a brief hello.', time: { start: 1, end: 2 }, id: 'prt_2', sessionID: 'ses_test', messageID: 'msg_test' },
+          { type: 'text', text: '你好', time: { start: 2, end: 3 }, id: 'prt_3', sessionID: 'ses_test', messageID: 'msg_test' },
+          { type: 'step-finish', reason: 'stop', tokens: {}, cost: 0, id: 'prt_4', sessionID: 'ses_test', messageID: 'msg_test' },
+        ],
+      };
+      const result = callExtract(input);
+      expect(result.thinking).toEqual(['The user just wants a brief hello.']);
+      expect(result.text).toEqual(['你好']);
+    });
+
+    test('reasoning 类型的 parts 应归入 thinking', () => {
+      const input = {
+        parts: [
+          { type: 'reasoning', text: '让我推理一下...' },
+          { type: 'text', text: '回答' },
+        ],
+      };
+      const result = callExtract(input);
+      expect(result.thinking).toEqual(['让我推理一下...']);
+      expect(result.text).toEqual(['回答']);
+    });
   });
 
   describe('sendMessage with thinking parts', () => {
-    test('thinking 和 text 分离 yield', async () => {
+    test('thinking (type=thinking) 和 text 分离 yield', async () => {
       responseRegistry.length = 0;
       registerJsonResponse('GET', /^\/session$/, [], 200);
       registerJsonResponse('POST', /^\/session$/, { id: 'ses_test' }, 200);
@@ -380,6 +408,33 @@ describe('KiloCodeChatRuntime', () => {
 
       expect(chunks).toContainEqual({ type: 'thinking', content: '让我分析一下...' });
       expect(chunks).toContainEqual({ type: 'text', content: '这是回答' });
+      expect(chunks[chunks.length - 1]).toEqual({ type: 'done' });
+    });
+
+    test('kilo serve 真实格式（reasoning + step-start/step-finish）分离 yield', async () => {
+      responseRegistry.length = 0;
+      registerJsonResponse('GET', /^\/session$/, [], 200);
+      registerJsonResponse('POST', /^\/session$/, { id: 'ses_test' }, 200);
+      registerJsonResponse('GET', /^\/provider$/, { all: [] }, 200);
+      registerJsonResponse('POST', /^\/session\/ses_test\/message$/, {
+        info: { id: 'msg_assistant', role: 'assistant' },
+        parts: [
+          { type: 'step-start', id: 'prt_1' },
+          { type: 'reasoning', text: 'Brief greeting response needed.' },
+          { type: 'text', text: '你好' },
+          { type: 'step-finish', reason: 'stop' },
+        ],
+      }, 200);
+
+      await startRuntime(runtime, mockProc.stdout);
+
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of runtime.sendMessage('hello')) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks).toContainEqual({ type: 'thinking', content: 'Brief greeting response needed.' });
+      expect(chunks).toContainEqual({ type: 'text', content: '你好' });
       expect(chunks[chunks.length - 1]).toEqual({ type: 'done' });
     });
   });
