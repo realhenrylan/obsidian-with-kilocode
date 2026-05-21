@@ -1,4 +1,6 @@
 import type { ChatRuntime, MessageContext, StreamChunk } from '../../../core/providers/types';
+import type { BinaryManager } from '../../../core/binary/BinaryManager';
+import type { KiloCodeSettings } from '../../../core/types';
 import { spawn, type ChildProcess } from 'child_process';
 
 /**
@@ -8,7 +10,8 @@ import { spawn, type ChildProcess } from 'child_process';
  */
 export class KiloCodeChatRuntime implements ChatRuntime {
   private process: ChildProcess | null = null;
-  private cliPath: string;
+  private binaryManager: BinaryManager;
+  private settings: KiloCodeSettings;
   private stdoutBuffer = '';
   private streaming = false;
 
@@ -18,16 +21,19 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   private done = false;
   private streamError: Error | null = null;
 
-  constructor(cliPath: string = 'kilo') {
-    this.cliPath = cliPath;
+  constructor(binaryManager: BinaryManager, settings: KiloCodeSettings) {
+    this.binaryManager = binaryManager;
+    this.settings = settings;
   }
 
   async start(): Promise<void> {
     if (this.process) return;
 
+    const cliPath = await this.binaryManager.getBinaryPath(this.settings);
+
     return new Promise((resolve, reject) => {
       try {
-        this.process = spawn(this.cliPath, ['--mode', 'json-rpc'], {
+        this.process = spawn(cliPath, ['--mode', 'json-rpc'], {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
 
