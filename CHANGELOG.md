@@ -8,7 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **npmDownloader**: npm tarball 下载 + gzip 解压 + tar 解析，提取平台二进制；`buildTarballUrl()` 构造 registry 下载链接，`extractBinaryFromTarball()` 从 tar buffer 提取目标文件，`downloadBinary()` 端到端下载流程
 - **PlatformDetector**: 平台/架构/AVX2/musl 检测模块，移植自 @kilocode/cli 的 bin/kilo 脚本；`detectPlatform()` 返回平台信息及 npm 包名候选列表，`supportsAvx2()` 检测 AVX2 指令集支持，`isMusl()` 检测 musl libc 环境
+- **BinaryManager**: CLI 二进制生命周期管理；`getBinaryPath()` 按优先级链发现二进制（用户配置 → 系统 PATH → 本地缓存 → 自动下载），`preload()` 异步预加载不阻塞 UI，版本文件管理（`.version`），下载降级链支持多 npm 包名 + 镜像源回退，macOS 隔离属性自动清除
 
 ## [0.6.1] - 2026-05-21
 

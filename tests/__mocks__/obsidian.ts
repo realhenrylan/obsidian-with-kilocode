@@ -11,5 +11,11 @@ module.exports = {
   PluginSettingTab: class PluginSettingTab {},
   ItemView: class ItemView {},
   WorkspaceLeaf: class WorkspaceLeaf {},
+  Notice: class Notice {
+    message: string;
+    constructor(message: string, _timeout?: number) {
+      this.message = message;
+    }
+  },
   requestUrl: jest.fn(),
 };
