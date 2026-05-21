@@ -36,6 +36,7 @@ export interface Message {
   timestamp: number;
   images?: ImageAttachment[];
   toolCalls?: ToolCallInfo[];
+  thinking?: string;
 }
 
 /** 图片附件 */

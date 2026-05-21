@@ -51,6 +51,7 @@ export interface ProviderRegistration {
 /** 流式响应块类型 */
 export type StreamChunkType =
   | 'text'
+  | 'thinking'
   | 'tool_use'
   | 'tool_result'
   | 'error'

@@ -6,6 +6,7 @@ export interface TabState {
   isForked?: boolean;
   forkSourceId?: string;
   scrollPosition?: number;
+  streamGeneration: number;
 }
 
 export class Tab {
@@ -17,6 +18,7 @@ export class Tab {
       conversationId: null,
       isStreaming: false,
       draftMessage: '',
+      streamGeneration: 0,
     };
   }
 
@@ -36,10 +38,17 @@ export class Tab {
     this.state.draftMessage = message;
   }
 
+  /** 递增流式代数，返回递增后的值 */
+  bumpStreamGeneration(): number {
+    this.state.streamGeneration += 1;
+    return this.state.streamGeneration;
+  }
+
   /** 从持久化状态恢复内部数据 */
   restoreFromState(saved: TabState): void {
     this.state.conversationId = saved.conversationId;
     this.state.isStreaming = saved.isStreaming;
     this.state.draftMessage = saved.draftMessage;
+    this.state.streamGeneration = saved.streamGeneration ?? 0;
   }
 }
