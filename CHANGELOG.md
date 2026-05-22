@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **模型覆盖修复**: 插件不再硬编码 `modelID` 覆盖 `kilo serve` CLI 自身配置。`defaultModel` 默认值从 `'claude-sonnet-4-20250514'` 改为空字符串。当用户在插件设置中未显式配置模型时，API 请求不发送 `modelID` 字段，让 CLI 使用其配置文件中的默认模型。设置面板模型下拉框新增 "Use CLI default" 选项。`KiloCodeChatRuntime` 构造函数改为接受设置 getter 函数 `() => KiloCodeSettings` 而非快照对象，确保运行时始终使用最新设置。
+
+### Added
+
+- **CLI 配置自动读取**: 新增 `src/core/cliConfigReader.ts`，插件启动时自动读取 `~/.config/kilo/config.json`，将 `defaultModel` 和 `baseUrl` 合并到插件设置（插件已有值优先，CLI 配置作为 fallback）。设置面板新增 "CLI Configuration" 区域，显示当前检测到的 CLI 模型和 API key 状态。
+- **CLI 重载命令**: 添加 "KiloCode: Reload CLI Configuration" 命令，用于在修改 `kilo` CLI 配置文件后手动重启子进程。`kilo serve` 只在启动时读取一次配置，修改 `~/.config/kilo/config.json` 后需要触发此命令使 new API key 等变更生效。
+
+### Fixed
+
+- **context 参数丢失**: `KiloCodeChatRuntime.sendMessage()` 的 `context` 参数（包含 `vaultPath` 和 `currentNote`）之前未传递给 `buildMessagePayload()`，导致 vault 路径上下文从未发送到 CLI。现已修复并将 `vaultPath` 写入请求 payload。
+- **首次打开无响应**: `KiloCodeView.onOpen()` 未自动创建默认标签页，`TabManager` 始终为空。用户输入消息后 `handleSend()` 因 `getActiveTab()` 返回 null 而静默退出，不提供任何反馈。修复：在 `onOpen()` 中检测无标签页时自动调用 `tabManager.createTab()` 创建首个标签页。
+- **`.playwright-mcp` 调试日志泄漏**: 工作区残留 37 个 Playwright 浏览器调试文件（console log + 页面快照）。删除目录并加入 `.gitignore`。
+
 ### Added
 
 - **ChatState 集中状态管理**: `src/features/chat/state/ChatState.ts` — 管理流式状态（isStreaming/streamGeneration/cancelRequested）、会话状态（currentConversationId/hasPendingConversationSave）、流式内容缓冲（currentTextContent/currentThinkingContent/toolCalls）。使用 getter/setter + 回调通知模式，支持事件订阅（streamingChange/cancelRequested/conversationChange）

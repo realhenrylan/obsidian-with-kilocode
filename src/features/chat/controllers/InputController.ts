@@ -9,8 +9,13 @@ import type { ChatRuntime } from '../../../core/providers/types';
 export class InputController {
   private runtime: ChatRuntime | null = null;
 
+  /** 是否已有运行时实例 */
+  hasRuntime(): boolean {
+    return this.runtime !== null;
+  }
+
   /** 设置运行时实例 */
-  setRuntime(runtime: ChatRuntime): void {
+  setRuntime(runtime: ChatRuntime | null): void {
     this.runtime = runtime;
   }
 

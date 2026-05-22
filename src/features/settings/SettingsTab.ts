@@ -1,7 +1,8 @@
 // src/features/settings/SettingsTab.ts
 
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type KiloCodePlugin from '../../main';
+import { readCliConfig, getCliConfigPath, cliHasApiKey } from '../../core/cliConfigReader';
 
 /**
  * KiloCode 设置面板
@@ -20,6 +21,46 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     containerEl.addClass('kilo-settings');
 
     containerEl.createEl('h2', { text: 'KiloCode Settings' });
+
+    // === CLI 配置状态 ===
+    containerEl.createEl('h3', { text: 'CLI Configuration' });
+    const cliConfig = readCliConfig();
+    const configPath = getCliConfigPath();
+    const hasApiKey = cliHasApiKey();
+    new Setting(containerEl)
+      .setName('CLI Config File')
+      .setDesc(`Path: ${configPath}`)
+      .addButton(btn => btn
+        .setButtonText('Reload CLI Config')
+        .onClick(() => {
+          const updated = readCliConfig();
+          if (updated.defaultModel) {
+            this.plugin.settings.defaultModel = updated.defaultModel;
+          }
+          // ⚠️ 不复制 apiKey——API key 只保留在 CLI 配置文件中，
+          //    由 CLI 子进程自己读取，避免 vault 云同步泄露
+          this.plugin.saveSettings();
+          this.display();
+          new Notice('CLI config reloaded and applied');
+        }));
+
+    if (cliConfig.defaultModel) {
+      containerEl.createDiv({
+        cls: 'kilo-setting-note',
+        text: `CLI default model: ${cliConfig.defaultModel}${hasApiKey ? ' | API key: configured in CLI config' : ''}`,
+      });
+    } else {
+      containerEl.createDiv({
+        cls: 'kilo-setting-note',
+        text: 'No CLI config file found. Configure model and API key below or set up kilo CLI.',
+      });
+    }
+
+    // API Configuration 区域下方的安全提示
+    containerEl.createDiv({
+      cls: 'kilo-setting-warning',
+      text: '⚠️ If you enter an API key below, it will be stored in the vault plugin data file (.obsidian/plugins/kilocode/data.json) and may be exposed if the vault is synced to cloud or Git. Prefer configuring the API key in kilo CLI config (~/.config/kilo/config.json) instead.',
+    });
 
     // === API 配置 ===
     containerEl.createEl('h3', { text: 'API Configuration' });
@@ -122,8 +163,9 @@ export class KiloCodeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Default Model')
-      .setDesc('Default AI model to use')
+      .setDesc('AI model override. Leave as "Use CLI default" to respect the CLI\'s own model configuration.')
       .addDropdown(dropdown => dropdown
+        .addOption('', 'Use CLI default')
         .addOption('claude-sonnet-4-20250514', 'Claude Sonnet 4')
         .addOption('claude-3-5-sonnet-20241022', 'Claude 3.5 Sonnet')
         .addOption('gpt-4o', 'GPT-4o')

@@ -10,6 +10,7 @@ import { ProviderRegistry } from './core/providers/ProviderRegistry';
 import { createKilocodeRegistration } from './providers/kilocode/registration';
 import { BinaryManager } from './core/binary/BinaryManager';
 import { KiloCodeSettingTab } from './features/settings/SettingsTab';
+import { readCliConfig, mergeCliConfigIntoSettings } from './core/cliConfigReader';
 
 export default class KiloCodePlugin extends Plugin {
   settings: KiloCodeSettings = DEFAULT_SETTINGS;
@@ -17,6 +18,14 @@ export default class KiloCodePlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+
+    // 读取本机 kilo CLI 配置文件，自动填充模型（不复制 API key）
+    // 插件设置中已有的值优先，CLI 配置作为 fallback
+    const cliConfig = readCliConfig();
+    mergeCliConfigIntoSettings(this.settings, cliConfig);
+    if (cliConfig.defaultModel) {
+      console.log('[KiloCode] Using CLI default model:', cliConfig.defaultModel);
+    }
 
     // 创建 BinaryManager 并后台预加载二进制
     // manifest.dir 是相对路径，需要转为绝对路径以确保 fs 和 spawn 正常工作

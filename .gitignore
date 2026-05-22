@@ -10,3 +10,4 @@ styles.css
 coverage/
 .jest-tmp/
 .kilo-probe-*/
+.playwright-mcp/

@@ -77,8 +77,8 @@ const mockBinaryManager = {
 
 const mockSettings = {
   cliPath: '',
-  defaultModel: 'claude-sonnet-4-20250514',
-  model: 'kilo-1',
+  defaultModel: '',
+  model: '',
   apiKey: '',
   environmentVariables: {},
   permissionMode: 'normal',
@@ -151,7 +151,7 @@ describe('KiloCodeChatRuntime', () => {
     mockProc = createMockProcess();
     (spawn as jest.Mock).mockReturnValue(mockProc.proc);
     registerDefaultHttpResponses();
-    runtime = new KiloCodeChatRuntime(mockBinaryManager, mockSettings);
+    runtime = new KiloCodeChatRuntime(mockBinaryManager, () => mockSettings);
   });
 
   afterEach(async () => {
@@ -190,7 +190,7 @@ describe('KiloCodeChatRuntime', () => {
         apiKey: 'sk-test',
         environmentVariables: { KILO_BASE_URL: 'https://example.test/v1' },
       } as any;
-      const rt = new KiloCodeChatRuntime(mockBinaryManager, settingsWithApi);
+      const rt = new KiloCodeChatRuntime(mockBinaryManager, () => settingsWithApi);
 
       const startPromise = rt.start();
       mockProc.stdout.write('kilo server listening on http://127.0.0.1:43210\n');
@@ -205,7 +205,7 @@ describe('KiloCodeChatRuntime', () => {
   });
 
   describe('sendMessage - HTTP message endpoint', () => {
-    test('posts text parts to the session message endpoint', async () => {
+    test('omits modelID when no model is configured (let CLI use its default)', async () => {
       await startRuntime(runtime, mockProc.stdout);
 
       const chunks: StreamChunk[] = [];
@@ -219,15 +219,37 @@ describe('KiloCodeChatRuntime', () => {
       expect(messageCall).toBeTruthy();
 
       const payload = JSON.parse(messageCall!.body);
-      expect(payload).toEqual(expect.objectContaining({
-        agent: 'code',
-        modelID: 'claude-sonnet-4-20250514',
-        parts: [{ type: 'text', text: 'hello' }],
-      }));
-      // 没有显式 provider 时，不发送 providerID
+      // 用户未配置模型时，不发送 modelID，让 CLI 使用自身配置的默认模型
+      expect(payload.modelID).toBeUndefined();
       expect(payload.providerID).toBeUndefined();
       expect(payload.model).toBeUndefined();
+      expect(payload).toEqual(expect.objectContaining({
+        agent: 'code',
+        parts: [{ type: 'text', text: 'hello' }],
+      }));
       expect(payload.messageID).toEqual(expect.stringMatching(/^msg_/));
+    });
+
+    test('sends modelID when user has explicitly configured a model', async () => {
+      // 模拟用户显式配置了模型
+      const settingsWithModel = { ...mockSettings, defaultModel: 'claude-sonnet-4-20250514' };
+      const rtWithModel = new KiloCodeChatRuntime(mockBinaryManager, () => settingsWithModel);
+      await startRuntime(rtWithModel, mockProc.stdout);
+
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of rtWithModel.sendMessage('hello')) {
+        chunks.push(chunk);
+      }
+
+      const messageCall = requestCalls.find(
+        (c) => c.options.method === 'POST' && /^\/session\/.+\/message$/.test(c.options.path),
+      );
+      const payload = JSON.parse(messageCall!.body);
+      expect(payload.modelID).toBe('claude-sonnet-4-20250514');
+      expect(payload.providerID).toBeUndefined();
+      expect(payload.model).toBeUndefined();
+
+      await rtWithModel.stop();
     });
 
     test('yields text chunks and a done chunk from JSON responses', async () => {

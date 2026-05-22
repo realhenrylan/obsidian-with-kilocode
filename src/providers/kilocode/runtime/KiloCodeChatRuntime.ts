@@ -36,7 +36,8 @@ interface ExtractedContent {
 
 export class KiloCodeChatRuntime implements ChatRuntime {
   private binaryManager: BinaryManager;
-  private settings: KiloCodeSettings;
+  /** 设置获取器——每次访问返回最新设置，而非构建时的快照 */
+  private getSettings: () => KiloCodeSettings;
   private currentProcess: ChildProcess | null = null;
   private startPromise: Promise<void> | null = null;
   private serverBaseUrl: string | null = null;
@@ -46,9 +47,14 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   private abortController: AbortController | null = null;
   private providerCache: ProviderListResponse | null = null;
 
-  constructor(binaryManager: BinaryManager, settings: KiloCodeSettings) {
+  /**
+   * @param binaryManager 二进制管理器
+   * @param getSettings 设置获取器——每次访问时调用，返回最新设置。不要传快照对象，
+   *                    否则用户修改设置后运行时不会生效。
+   */
+  constructor(binaryManager: BinaryManager, getSettings: () => KiloCodeSettings) {
     this.binaryManager = binaryManager;
-    this.settings = settings;
+    this.getSettings = getSettings;
   }
 
   async start(): Promise<void> {
@@ -86,7 +92,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.abortController = new AbortController();
 
     try {
-      const payload = await this.buildMessagePayload(content);
+      const payload = await this.buildMessagePayload(content, context);
       const response = await this.request(`/session/${encodeURIComponent(this.sessionId)}/message`, {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -145,7 +151,8 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   sendApproval(): void {}
 
   private async startServer(): Promise<void> {
-    const cliPath = await this.binaryManager.getBinaryPath(this.settings);
+    const settings = this.getSettings();
+    const cliPath = await this.binaryManager.getBinaryPath(settings);
     this.serverPassword = this.generatePassword();
     this.providerCache = null;
 
@@ -307,35 +314,49 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     return id;
   }
 
-  private async buildMessagePayload(content: string): Promise<Record<string, unknown>> {
-    const model = await this.resolveModel();
-
+  private async buildMessagePayload(content: string, context?: MessageContext): Promise<Record<string, unknown>> {
     const payload: Record<string, unknown> = {
       messageID: this.makeId('msg'),
-      modelID: model.modelID,
       agent: this.resolveAgent(),
       parts: [{ type: 'text', text: content }],
     };
 
-    // 只在用户显式指定 provider/model 格式时才发送 providerID，
-    // 否则让服务器根据 modelID 自行路由到正确的 provider
-    if (model.providerID) {
-      payload.providerID = model.providerID;
-      payload.model = model;
+    // 传递 vault 路径上下文，让 CLI 知道在哪个 vault 中操作
+    if (context?.vaultPath) {
+      payload.vaultPath = context.vaultPath;
+    }
+
+    // 仅在用户在插件设置中显式配置了模型时才发送 modelID，
+    // 否则让 CLI 使用自身配置文件中的默认模型。
+    const model = await this.resolveModel();
+    if (model) {
+      payload.modelID = model.modelID;
+      // 只在用户显式指定 providerID 时发送（格式如 "anthropic/claude-sonnet-4"）
+      if (model.providerID) {
+        payload.providerID = model.providerID;
+        payload.model = model;
+      }
     }
 
     return payload;
   }
 
-  private async resolveModel(): Promise<KiloModel> {
-    const configuredModel = (this.settings.defaultModel || this.settings.model || '').trim();
+  /**
+   * 解析用户配置的模型。
+   * @returns 用户显式指定了模型时返回 KiloModel，否则返回 null（让 CLI 使用自身默认）。
+   */
+  private async resolveModel(): Promise<KiloModel | null> {
+    const settings = this.getSettings();
+    const configuredModel = (settings.defaultModel || settings.model || '').trim();
+    if (!configuredModel) return null;
+
     const parsed = this.parseConfiguredModel(configuredModel);
     if (parsed) return parsed;
 
-    // 没有显式指定 provider，只返回 modelID，让服务器路由
+    // 没有 provider 前缀（如 "claude-sonnet-4"），只返回 modelID，让服务器路由
     return {
       providerID: '',
-      modelID: configuredModel || 'claude-sonnet-4-20250514',
+      modelID: configuredModel,
     };
   }
 
@@ -374,7 +395,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   }
 
   private resolveAgent(): string {
-    if (this.settings.permissionMode === 'plan') return 'plan';
+    if (this.getSettings().permissionMode === 'plan') return 'plan';
     return DEFAULT_AGENT;
   }
 
@@ -686,11 +707,12 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     const env: Record<string, string> = { ...(process.env as Record<string, string>) };
     env.KILO_SERVER_PASSWORD = serverPassword;
 
-    if (this.settings.apiKey) {
-      env.KILO_API_KEY = this.settings.apiKey;
+    const settings = this.getSettings();
+    if (settings.apiKey) {
+      env.KILO_API_KEY = settings.apiKey;
     }
-    if (this.settings.environmentVariables?.['KILO_BASE_URL']) {
-      env.KILO_BASE_URL = this.settings.environmentVariables['KILO_BASE_URL'];
+    if (settings.environmentVariables?.['KILO_BASE_URL']) {
+      env.KILO_BASE_URL = settings.environmentVariables['KILO_BASE_URL'];
     }
     return env;
   }

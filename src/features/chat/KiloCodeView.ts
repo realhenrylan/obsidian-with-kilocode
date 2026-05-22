@@ -126,12 +126,27 @@ export class KiloCodeView extends ItemView {
       },
       hotkeys: [{ modifiers: ['Shift'], key: 'Tab' }],
     });
+    this.plugin.addCommand({
+      id: 'reload-cli',
+      name: 'Reload CLI Configuration',
+      callback: () => {
+        void this.restartRuntime();
+      },
+    });
 
     // 只创建一次 DOM 骨架
     this.buildLayout();
 
+    // 确保至少有一个标签页（首次打开时创建默认标签页）
+    let activeTab = this.tabManager.getActiveTab();
+    if (!activeTab) {
+      this.tabManager.createTab();
+      this.conversationController.createNew();
+      this.updateUI();
+      activeTab = this.tabManager.getActiveTab();
+    }
+
     // 恢复当前会话的消息
-    const activeTab = this.tabManager.getActiveTab();
     if (activeTab?.state.conversationId) {
       this.chatState.setConversationId(activeTab.state.conversationId);
       void this.conversationController.restoreConversation(activeTab.state.conversationId);
@@ -560,6 +575,20 @@ export class KiloCodeView extends ItemView {
     }
 
     return newRuntime;
+  }
+
+  /**
+   * 重启 CLI 进程。
+   * kilo serve 只在启动时读取一次配置文件，之后修改 ~/.config/kilo/config.json
+   * 不会自动生效。调用此方法可以停止当前进程并让下一次 getOrCreateRuntime() 创建新进程。
+   */
+  async restartRuntime(): Promise<void> {
+    const runtime = this.inputController.getRuntime();
+    if (runtime) {
+      await runtime.stop();
+      this.inputController.setRuntime(null);
+    }
+    new Notice('KiloCode CLI configuration reloaded. The CLI will restart on next message.');
   }
 
   /** 获取当前活跃笔记路径 */

@@ -17,7 +17,7 @@ export function createKilocodeRegistration(
     displayName: 'KiloCode',
     capabilities: KILOCODE_CAPABILITIES,
     createRuntime: () => {
-      return new KiloCodeChatRuntime(binaryManager, getSettings());
+      return new KiloCodeChatRuntime(binaryManager, getSettings);
     },
   };
 }
