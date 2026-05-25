@@ -103,13 +103,36 @@ export class KiloCodeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('KiloCode CLI Path')
-      .setDesc('Path to KiloCode CLI executable')
+      .setDesc('Path to KiloCode CLI executable. Leave empty for auto-detection.')
       .addText(text => text
         .setPlaceholder('kilo')
         .setValue(this.plugin.settings.cliPath)
         .onChange(async (value) => {
           this.plugin.settings.cliPath = value;
           await this.plugin.saveSettings();
+        }))
+      .addButton(btn => btn
+        .setButtonText('Detect')
+        .setTooltip('Auto-detect KiloCode CLI on your system')
+        .onClick(async () => {
+          btn.setDisabled(true);
+          btn.setButtonText('Detecting...');
+          try {
+            const result = await this.plugin.binaryManager.autoDetect();
+            if (result) {
+              this.plugin.settings.cliPath = result.path;
+              await this.plugin.saveSettings();
+              new Notice('KiloCode CLI detected: ' + result.path + ' (' + result.method + ')');
+              this.display();
+            } else {
+              new Notice('KiloCode CLI not found on your system. Download will be attempted automatically.');
+            }
+          } catch (err) {
+            new Notice('Detection failed: ' + err.message);
+          } finally {
+            btn.setDisabled(false);
+            btn.setButtonText('Detect');
+          }
         }));
 
     new Setting(containerEl)

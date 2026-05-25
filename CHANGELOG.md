@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **重构通信层**: `KiloCodeChatRuntime` 废弃 `kilo run <message>` 子进程模式，改用 `@kilocode/sdk` 的 `createKiloServer` / `createKiloClient` API，大幅精简代码（885 行 → ~400 行）
+- **二进制检测多阶段策略**: `BinaryManager.getBinaryPath()` 按优先级执行 5 阶段检测：手动路径 → 插件目录 → 系统 PATH → 全局 npm → npm 下载。新增 `DetectionResult` 接口和 `autoDetect()` 方法
+- **CLI 配置读取器增强**: `cliConfigReader.ts` 支持多文件名（kilo.jsonc / kilo.json / config.json），新增 JSONC 解析器（注释、尾逗号），移除 apiKey 相关逻辑
+- **构建配置**: esbuild 新增 `platform: "node"`；tsconfig 的 `moduleResolution` 改为 `bundler`；jest 添加 `@kilocode/sdk` 模块映射
+
+### Added
+
+- **模型选择支持**: `ChatRuntime` 接口新增 `setModel(modelId)` / `getModel()` 方法；`KiloCodeView` 新增模型按钮 DOM 引用，支持运行时切换模型
+- **依赖**: 新增 `@kilocode/sdk: ^7.3.1`
+- **ROADMAP.md**: 新增项目规划文件，跟踪里程碑与待办事项
+
+### Fixed
+
+- **`.write_runtime.js` 残留**: 根目录新增测试辅助文件 `.write_runtime.js`（待移入 tests 目录）
+
+### Changed
+
 - **模型覆盖修复**: 插件不再硬编码 `modelID` 覆盖 `kilo serve` CLI 自身配置。`defaultModel` 默认值从 `'claude-sonnet-4-20250514'` 改为空字符串。当用户在插件设置中未显式配置模型时，API 请求不发送 `modelID` 字段，让 CLI 使用其配置文件中的默认模型。设置面板模型下拉框新增 "Use CLI default" 选项。`KiloCodeChatRuntime` 构造函数改为接受设置 getter 函数 `() => KiloCodeSettings` 而非快照对象，确保运行时始终使用最新设置。
 
 ### Added

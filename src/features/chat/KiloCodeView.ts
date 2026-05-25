@@ -1,6 +1,6 @@
-// src/features/chat/KiloCodeView.ts
-// 重构：借鉴 claudian 架构，DOM 骨架只创建一次，通过 updateUI() 更新内容
-// 解决：(1) 无法发送第二条消息 (2) 切换会话消息消失 (3) 重启后无法发送
+﻿// src/features/chat/KiloCodeView.ts
+// 閲嶆瀯锛氬€熼壌 claudian 鏋舵瀯锛孌OM 楠ㄦ灦鍙垱寤轰竴娆★紝閫氳繃 updateUI() 鏇存柊鍐呭
+// 瑙ｅ喅锛?1) 鏃犳硶鍙戦€佺浜屾潯娑堟伅 (2) 鍒囨崲浼氳瘽娑堟伅娑堝け (3) 閲嶅惎鍚庢棤娉曞彂閫?
 
 import { ItemView, MarkdownView, Notice, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_KILOCODE } from '../../core/types';
@@ -20,7 +20,7 @@ import { PlanModeController } from './PlanModeController';
 import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import type { ChatRuntime } from '../../core/providers/types';
 
-/** 按 Tab 缓冲的流式状态（用于跨标签流式恢复） */
+/** 鎸?Tab 缂撳啿鐨勬祦寮忕姸鎬侊紙鐢ㄤ簬璺ㄦ爣绛炬祦寮忔仮澶嶏級 */
 interface TabStreamingState {
   content: string;
   thinking: string;
@@ -46,24 +46,25 @@ export class KiloCodeView extends ItemView {
   private currentNoteContext: CurrentNoteContext;
   private imageContext: ImageContext;
 
-  // 持久化 DOM 引用（骨架只创建一次）
+  // 鎸佷箙鍖?DOM 寮曠敤锛堥鏋跺彧鍒涘缓涓€娆★級
   private viewContainerEl: HTMLElement | null = null;
   private tabBarEl: HTMLElement | null = null;
   private messagesEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
   private inputContainerEl: HTMLElement | null = null;
   private modeToggleEl: HTMLElement | null = null;
+  private modelBtnEl: HTMLElement | null = null;
   private actionBarEl: HTMLElement | null = null;
   private cancelBtnEl: HTMLButtonElement | null = null;
   private sendBtnEl: HTMLButtonElement | null = null;
 
-  // 标记 DOM 是否已初始化
+  // 鏍囪 DOM 鏄惁宸插垵濮嬪寲
   private isLayoutBuilt = false;
 
-  // 流式发送者标签 ID（防止跨标签渲染）
+  // 娴佸紡鍙戦€佽€呮爣绛?ID锛堥槻姝㈣法鏍囩娓叉煋锛?
   private senderTabId: string | null = null;
 
-  // 流式期间切换标签支持：按标签缓冲流式状态 + 切换中标志
+  // 娴佸紡鏈熼棿鍒囨崲鏍囩鏀寔锛氭寜鏍囩缂撳啿娴佸紡鐘舵€?+ 鍒囨崲涓爣蹇?
   private streamingStates: Map<string, TabStreamingState> = new Map();
   private isSwitchingTab = false;
 
@@ -88,12 +89,12 @@ export class KiloCodeView extends ItemView {
     this.currentNoteContext = new CurrentNoteContext(plugin.app);
     this.imageContext = new ImageContext(5); // 5MB limit
 
-    // 设置审批处理器（弹出 Modal）
+    // 璁剧疆瀹℃壒澶勭悊鍣紙寮瑰嚭 Modal锛?
     this.approvalManager.setApprovalHandler(async (request) => {
       return showApprovalModal(this.app, request);
     });
 
-    // 注入 ConversationController 回调（避免直接依赖 DOM）
+    // 娉ㄥ叆 ConversationController 鍥炶皟锛堥伩鍏嶇洿鎺ヤ緷璧?DOM锛?
     this.conversationController.onClearMessages(() => {
       this.messagesEl?.empty();
     });
@@ -134,10 +135,10 @@ export class KiloCodeView extends ItemView {
       },
     });
 
-    // 只创建一次 DOM 骨架
+    // 鍙垱寤轰竴娆?DOM 楠ㄦ灦
     this.buildLayout();
 
-    // 确保至少有一个标签页（首次打开时创建默认标签页）
+    // 纭繚鑷冲皯鏈変竴涓爣绛鹃〉锛堥娆℃墦寮€鏃跺垱寤洪粯璁ゆ爣绛鹃〉锛?
     let activeTab = this.tabManager.getActiveTab();
     if (!activeTab) {
       this.tabManager.createTab();
@@ -146,7 +147,7 @@ export class KiloCodeView extends ItemView {
       activeTab = this.tabManager.getActiveTab();
     }
 
-    // 恢复当前会话的消息
+    // 鎭㈠褰撳墠浼氳瘽鐨勬秷鎭?
     if (activeTab?.state.conversationId) {
       this.chatState.setConversationId(activeTab.state.conversationId);
       void this.conversationController.restoreConversation(activeTab.state.conversationId);
@@ -158,17 +159,17 @@ export class KiloCodeView extends ItemView {
     this.approvalManager.cancelAll();
     this.inputController.cancel();
     this.streamingStates.clear();
-    // 通过 ConversationController 刷新待写入的会话数据
+    // 閫氳繃 ConversationController 鍒锋柊寰呭啓鍏ョ殑浼氳瘽鏁版嵁
     await this.conversationController.save();
     this.messageRenderer = null;
     this.isLayoutBuilt = false;
   }
 
   // ============================================
-  // DOM 骨架（只创建一次）
+  // DOM 楠ㄦ灦锛堝彧鍒涘缓涓€娆★級
   // ============================================
 
-  /** 创建 DOM 骨架，所有事件监听器只注册一次 */
+  /** 鍒涘缓 DOM 楠ㄦ灦锛屾墍鏈変簨浠剁洃鍚櫒鍙敞鍐屼竴娆?*/
   private buildLayout(): void {
     if (this.isLayoutBuilt) return;
 
@@ -177,35 +178,35 @@ export class KiloCodeView extends ItemView {
     container.addClass('kilo-code-view');
     this.viewContainerEl = container;
 
-    // 模式切换
+    // 妯″紡鍒囨崲
     this.buildModeToggle(container);
 
-    // 标签栏
+    // 鏍囩鏍?
     this.tabBarEl = container.createDiv({ cls: 'kilo-tab-bar' });
 
-    // 消息区域（持久化）
+    // 娑堟伅鍖哄煙锛堟寔涔呭寲锛?
     this.messagesEl = container.createDiv({ cls: 'kilo-messages' });
     this.messageRenderer = new MessageRenderer(this.messagesEl, this.app, this);
 
-    // 工具栏
+    // 宸ュ叿鏍?
     this.buildToolbar(container);
 
-    // 输入区域（持久化）
+    // 杈撳叆鍖哄煙锛堟寔涔呭寲锛?
     this.buildInputArea(container);
 
-    // 操作栏
+    // 鎿嶄綔鏍?
     this.buildActionBar(container);
 
-    // 注册消息操作事件委托（只注册一次）
+    // 娉ㄥ唽娑堟伅鎿嶄綔浜嬩欢濮旀墭锛堝彧娉ㄥ唽涓€娆★級
     this.registerMessageActionListeners();
 
     this.isLayoutBuilt = true;
 
-    // 初始更新 UI 内容
+    // 鍒濆鏇存柊 UI 鍐呭
     this.updateUI();
   }
 
-  /** 创建模式切换 UI */
+  /** 鍒涘缓妯″紡鍒囨崲 UI */
   private buildModeToggle(container: HTMLElement): void {
     this.modeToggleEl = container.createDiv({ cls: 'kilo-mode-toggle' });
     const modeBtn = this.modeToggleEl.createEl('button', { cls: 'kilo-mode-btn' });
@@ -217,13 +218,13 @@ export class KiloCodeView extends ItemView {
     this.updateModeToggle();
   }
 
-  /** 更新模式切换按钮文本（不重建 DOM） */
+  /** 鏇存柊妯″紡鍒囨崲鎸夐挳鏂囨湰锛堜笉閲嶅缓 DOM锛?*/
   private updateModeToggle(): void {
     if (!this.modeToggleEl) return;
     const modeBtn = this.modeToggleEl.querySelector('.kilo-mode-btn') as HTMLButtonElement;
     if (!modeBtn) return;
     const currentMode = this.planModeController.getCurrentModeConfig();
-    // 只更新第一个文本节点
+    // 鍙洿鏂扮涓€涓枃鏈妭鐐?
     const firstChild = modeBtn.firstChild;
     if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
       firstChild.textContent = `${currentMode.icon} ${currentMode.name}`;
@@ -235,7 +236,7 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 创建工具栏 */
+  /** 鍒涘缓宸ュ叿鏍?*/
   private buildToolbar(container: HTMLElement): void {
     const toolbarContainer = container.createDiv({ cls: 'kilo-toolbar-container' });
     const inputToolbar = new InputToolbar(toolbarContainer);
@@ -281,11 +282,11 @@ export class KiloCodeView extends ItemView {
     inputToolbar.render();
   }
 
-  /** 创建输入区域（textarea 事件监听器只注册一次） */
+  /** 鍒涘缓杈撳叆鍖哄煙锛坱extarea 浜嬩欢鐩戝惉鍣ㄥ彧娉ㄥ唽涓€娆★級 */
   private buildInputArea(container: HTMLElement): void {
     this.inputContainerEl = container.createDiv({ cls: 'kilo-input-container' });
 
-    // 图片预览区域
+    // 鍥剧墖棰勮鍖哄煙
     this.imageContext.renderPreview(this.inputContainerEl);
 
     this.textareaEl = this.inputContainerEl.createEl('textarea', {
@@ -293,14 +294,14 @@ export class KiloCodeView extends ItemView {
       placeholder: this.getRandomPlaceholder(),
     });
 
-    // 粘贴事件
+    // 绮樿创浜嬩欢
     this.registerDomEvent(this.textareaEl, 'paste', (e) => {
       if (this.imageContext.addFromPaste(e)) {
         this.imageContext.renderPreview(this.inputContainerEl!);
       }
     });
 
-    // 拖拽事件
+    // 鎷栨嫿浜嬩欢
     this.registerDomEvent(this.textareaEl, 'dragover', (e) => {
       e.preventDefault();
     });
@@ -311,7 +312,7 @@ export class KiloCodeView extends ItemView {
       }
     });
 
-    // 键盘事件（只注册一次，不会因 render() 丢失）
+    // 閿洏浜嬩欢锛堝彧娉ㄥ唽涓€娆★紝涓嶄細鍥?render() 涓㈠け锛?
     this.registerDomEvent(this.textareaEl, 'keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -321,11 +322,11 @@ export class KiloCodeView extends ItemView {
     });
   }
 
-  /** 创建操作栏 */
+  /** 鍒涘缓鎿嶄綔鏍?*/
   private buildActionBar(container: HTMLElement): void {
     this.actionBarEl = container.createDiv({ cls: 'kilo-action-bar' });
 
-    // 发送按钮
+    // 鍙戦€佹寜閽?
     this.sendBtnEl = this.actionBarEl.createEl('button', {
       cls: 'kilo-btn kilo-btn-primary',
       text: 'Send',
@@ -337,7 +338,7 @@ export class KiloCodeView extends ItemView {
       }
     });
 
-    // 取消按钮
+    // 鍙栨秷鎸夐挳
     this.cancelBtnEl = this.actionBarEl.createEl('button', {
       cls: 'kilo-btn kilo-btn-cancel',
       text: 'Cancel',
@@ -347,26 +348,26 @@ export class KiloCodeView extends ItemView {
   }
 
   // ============================================
-  // UI 更新（不销毁 DOM，只更新内容）
+  // UI 鏇存柊锛堜笉閿€姣?DOM锛屽彧鏇存柊鍐呭锛?
   // ============================================
 
-  /** 更新 UI：标签栏、按钮状态（不销毁 DOM） */
+  /** 鏇存柊 UI锛氭爣绛炬爮銆佹寜閽姸鎬侊紙涓嶉攢姣?DOM锛?*/
   private updateUI(): void {
     this.updateTabBar();
     this.updateButtonStates();
   }
 
-  /** 更新标签栏内容 */
+  /** 鏇存柊鏍囩鏍忓唴瀹?*/
   private updateTabBar(): void {
     if (!this.tabBarEl) return;
 
-    // 清空标签栏内容（不销毁整个容器）
+    // 娓呯┖鏍囩鏍忓唴瀹癸紙涓嶉攢姣佹暣涓鍣級
     const tabsContainer = this.tabBarEl.querySelector('.kilo-tabs');
     if (tabsContainer) tabsContainer.remove();
     const addBtn = this.tabBarEl.querySelector('.kilo-tab-add');
     if (addBtn) addBtn.remove();
 
-    // 重建标签页列表
+    // 閲嶅缓鏍囩椤靛垪琛?
     const tabsEl = this.tabBarEl.createDiv({ cls: 'kilo-tabs' });
     const tabs = this.tabManager.getAllTabs();
     const activeTabId = this.tabManager.getActiveTab()?.id;
@@ -383,7 +384,7 @@ export class KiloCodeView extends ItemView {
       this.registerDomEvent(tabEl, 'click', () => void this.handleTabClick(tab.id));
     }
 
-    // 新建标签页按钮
+    // 鏂板缓鏍囩椤垫寜閽?
     if (this.tabManager.canCreateTab()) {
       const addBtnEl = this.tabBarEl.createDiv({
         cls: 'kilo-tab-add',
@@ -393,7 +394,7 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 更新按钮状态（发送/取消） */
+  /** 鏇存柊鎸夐挳鐘舵€侊紙鍙戦€?鍙栨秷锛?*/
   private updateButtonStates(): void {
     const activeTab = this.tabManager.getActiveTab();
     const isStreaming = activeTab?.state.isStreaming ?? false;
@@ -413,12 +414,12 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 截断 ID 用于标签显示 */
+  /** 鎴柇 ID 鐢ㄤ簬鏍囩鏄剧ず */
   private truncateId(id: string): string {
     return id.length > 12 ? id.slice(0, 12) + '...' : id;
   }
 
-  /** 随机占位符提示语 */
+  /** 闅忔満鍗犱綅绗︽彁绀鸿 */
   private getRandomPlaceholder(): string {
     const placeholders = [
       'Type a message... (Enter to send, Shift+Enter for new line)',
@@ -431,10 +432,10 @@ export class KiloCodeView extends ItemView {
   }
 
   // ============================================
-  // 消息管理
+  // 娑堟伅绠＄悊
   // ============================================
 
-  /** 在消息区域追加一条用户消息 */
+  /** 鍦ㄦ秷鎭尯鍩熻拷鍔犱竴鏉＄敤鎴锋秷鎭?*/
   private appendUserMessage(content: string): void {
     if (!this.messagesEl) return;
 
@@ -454,7 +455,7 @@ export class KiloCodeView extends ItemView {
     this.scrollToBottom();
   }
 
-  /** 在消息区域追加一条助手消息（流式完成后） */
+  /** 鍦ㄦ秷鎭尯鍩熻拷鍔犱竴鏉″姪鎵嬫秷鎭紙娴佸紡瀹屾垚鍚庯級 */
   private appendAssistantMessage(message: Message): void {
     if (!this.messagesEl || !this.messageRenderer) return;
 
@@ -462,7 +463,7 @@ export class KiloCodeView extends ItemView {
     this.scrollToBottom();
   }
 
-  /** 滚动到底部 */
+  /** 婊氬姩鍒板簳閮?*/
   private scrollToBottom(): void {
     if (this.messagesEl) {
       this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
@@ -470,30 +471,29 @@ export class KiloCodeView extends ItemView {
   }
 
   // ============================================
-  // 标签页操作
+  // 鏍囩椤垫搷浣?
   // ============================================
 
-  /** 处理标签页点击（流式进行中也可切换，通过 TabStreamingState 恢复渲染） */
+  /** 澶勭悊鏍囩椤电偣鍑伙紙娴佸紡杩涜涓篃鍙垏鎹紝閫氳繃 TabStreamingState 鎭㈠娓叉煋锛?*/
   private async handleTabClick(tabId: string): Promise<void> {
     this.isSwitchingTab = true;
     try {
       const tab = this.tabManager.switchTab(tabId);
       if (!tab) return;
 
-      // 保存当前标签的草稿
+      // 淇濆瓨褰撳墠鏍囩鐨勮崏绋?
       this.saveCurrentDraft();
 
-      // 通过 ConversationController 切换会话（含 save → reset → load → render）
+      // 閫氳繃 ConversationController 鍒囨崲浼氳瘽锛堝惈 save 鈫?reset 鈫?load 鈫?render锛?
       if (tab.state.conversationId) {
         await this.conversationController.switchTo(tab.state.conversationId);
       } else {
         this.messagesEl?.empty();
       }
 
-      // 同步 ChatState
-      this.chatState.setConversationId(tab.state.conversationId ?? null);
-
-      // 如果目标标签有正在进行的流，重建流式渲染状态
+      // 鍚屾 ChatState
+        
+      // 濡傛灉鐩爣鏍囩鏈夋鍦ㄨ繘琛岀殑娴侊紝閲嶅缓娴佸紡娓叉煋鐘舵€?
       if (tab.state.isStreaming) {
         const state = this.streamingStates.get(tabId);
         if (state) {
@@ -510,7 +510,7 @@ export class KiloCodeView extends ItemView {
         }
       }
 
-      // 恢复草稿
+      // 鎭㈠鑽夌
       this.restoreDraft(tab.state.draftMessage);
 
       this.updateUI();
@@ -519,19 +519,19 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 处理新建标签页 */
+  /** 澶勭悊鏂板缓鏍囩椤?*/
   private handleNewTab(): void {
     if (this.tabManager.canCreateTab()) {
       this.saveCurrentDraft();
       this.tabManager.createTab();
-      // 通过 ConversationController 重置到空白状态
+      // 閫氳繃 ConversationController 閲嶇疆鍒扮┖鐧界姸鎬?
       this.conversationController.createNew();
       this.restoreDraft('');
       this.updateUI();
     }
   }
 
-  /** 保存当前标签的草稿消息 */
+  /** 淇濆瓨褰撳墠鏍囩鐨勮崏绋挎秷鎭?*/
   private saveCurrentDraft(): void {
     const activeTab = this.tabManager.getActiveTab();
     if (activeTab && this.textareaEl) {
@@ -539,7 +539,7 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 恢复草稿消息到 textarea */
+  /** 鎭㈠鑽夌娑堟伅鍒?textarea */
   private restoreDraft(draft: string): void {
     if (this.textareaEl) {
       this.textareaEl.value = draft;
@@ -547,16 +547,16 @@ export class KiloCodeView extends ItemView {
   }
 
   // ============================================
-  // 发送消息
+  // 鍙戦€佹秷鎭?
   // ============================================
 
-  /** 检查发送者标签是否仍然活跃（防止跨标签渲染） */
+  /** 妫€鏌ュ彂閫佽€呮爣绛炬槸鍚︿粛鐒舵椿璺冿紙闃叉璺ㄦ爣绛炬覆鏌擄級 */
   private isSenderTabActive(): boolean {
     if (!this.senderTabId) return false;
     return this.tabManager.getActiveTab()?.id === this.senderTabId;
   }
 
-  /** 获取或启动 ChatRuntime */
+  /** 鑾峰彇鎴栧惎鍔?ChatRuntime */
   private async getOrCreateRuntime(): Promise<ChatRuntime | null> {
     const runtime = this.inputController.getRuntime();
     if (runtime) return runtime;
@@ -578,26 +578,24 @@ export class KiloCodeView extends ItemView {
   }
 
   /**
-   * 重启 CLI 进程。
-   * kilo serve 只在启动时读取一次配置文件，之后修改 ~/.config/kilo/config.json
-   * 不会自动生效。调用此方法可以停止当前进程并让下一次 getOrCreateRuntime() 创建新进程。
+   * 閲嶅惎 CLI 杩涚▼銆?
+   * kilo serve 鍙湪鍚姩鏃惰鍙栦竴娆￠厤缃枃浠讹紝涔嬪悗淇敼 ~/.config/kilo/config.json
+   * 涓嶄細鑷姩鐢熸晥銆傝皟鐢ㄦ鏂规硶鍙互鍋滄褰撳墠杩涚▼骞惰涓嬩竴娆?getOrCreateRuntime() 鍒涘缓鏂拌繘绋嬨€?
    */
   async restartRuntime(): Promise<void> {
-    const runtime = this.inputController.getRuntime();
-    if (runtime) {
-      await runtime.stop();
-      this.inputController.setRuntime(null);
+      const runtime = this.inputController.getRuntime();
+      if (runtime) {
+        runtime.resetSession();
+        this.inputController.setRuntime(null);
+      }
+      new Notice('KiloCode session reset. Next message will use new configuration.');
     }
-    new Notice('KiloCode CLI configuration reloaded. The CLI will restart on next message.');
-  }
-
-  /** 获取当前活跃笔记路径 */
   private getCurrentNotePath(): string | undefined {
     const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
     return activeView?.file?.path;
   }
 
-  /** 处理发送消息 */
+  /** 澶勭悊鍙戦€佹秷鎭?*/
   private async handleSend(content: string): Promise<void> {
     if (!content.trim()) return;
 
@@ -606,29 +604,29 @@ export class KiloCodeView extends ItemView {
 
     if (activeTab.state.isStreaming) return;
 
-    // 记录发送者标签 ID（在 try 外定义，供 catch/finally 使用）
+    // 璁板綍鍙戦€佽€呮爣绛?ID锛堝湪 try 澶栧畾涔夛紝渚?catch/finally 浣跨敤锛?
     const tabId = activeTab.id;
 
     try {
-      // 0. 递增流式代数（冲突保护）+ 记录发送者标签 ID
+      // 0. 閫掑娴佸紡浠ｆ暟锛堝啿绐佷繚鎶わ級+ 璁板綍鍙戦€佽€呮爣绛?ID
       const generation = activeTab.bumpStreamGeneration();
       this.senderTabId = activeTab.id;
 
-      // 初始化该标签的流式状态缓冲（用于跨标签切换恢复）
+      // 鍒濆鍖栬鏍囩鐨勬祦寮忕姸鎬佺紦鍐诧紙鐢ㄤ簬璺ㄦ爣绛惧垏鎹㈡仮澶嶏級
       this.streamingStates.set(tabId, {
         content: '',
         thinking: '',
         toolCalls: new Map(),
       });
 
-      // 1. 确保会话存在（懒创建）
+      // 1. 纭繚浼氳瘽瀛樺湪锛堟噿鍒涘缓锛?
       const conversationId = await this.conversationController.ensureConversation();
       if (!activeTab.state.conversationId) {
         activeTab.setConversation(conversationId);
         this.updateTabBar();
       }
 
-      // 2. 构建用户消息
+      // 2. 鏋勫缓鐢ㄦ埛娑堟伅
       const messageWithPrefix = this.planModeController.getMessageWithPrefix(content);
       const images = this.imageContext.getImages();
 
@@ -648,10 +646,10 @@ export class KiloCodeView extends ItemView {
       };
       await this.conversationController.addMessage(userMessage);
 
-      // 3. 立即在 UI 上显示用户消息
+      // 3. 绔嬪嵆鍦?UI 涓婃樉绀虹敤鎴锋秷鎭?
       this.appendUserMessage(content);
 
-      // 4. 获取 runtime 并发送
+      // 4. 鑾峰彇 runtime 骞跺彂閫?
       const runtime = await this.getOrCreateRuntime();
       if (!runtime) {
         new Notice('KiloCode CLI not available');
@@ -665,16 +663,16 @@ export class KiloCodeView extends ItemView {
         currentNote: currentNote || this.getCurrentNotePath(),
       });
 
-      // 5. 进入流式状态
+      // 5. 杩涘叆娴佸紡鐘舵€?
       activeTab.setStreaming(true);
       this.updateButtonStates();
 
-      // 创建空的助手消息容器（流式渲染目标，仅当前标签即发送者时创建）
+      // 鍒涘缓绌虹殑鍔╂墜娑堟伅瀹瑰櫒锛堟祦寮忔覆鏌撶洰鏍囷紝浠呭綋鍓嶆爣绛惧嵆鍙戦€佽€呮椂鍒涘缓锛?
       if (this.isSenderTabActive()) {
         this.messageRenderer?.addAssistantMessage();
       }
 
-      // 设置审批决定回调
+      // 璁剧疆瀹℃壒鍐冲畾鍥炶皟
       this.streamController.setApprovalDecisionCallback((toolName, decision) => {
         const rt = this.inputController.getRuntime();
         rt?.sendApproval?.(toolName, decision as 'allow' | 'deny');
@@ -682,10 +680,10 @@ export class KiloCodeView extends ItemView {
 
       const assistantMessage = await this.streamController.consumeStream(generator, {
         onText: (text) => {
-          // 始终缓冲到标签状态（跨标签切换时恢复用）
+          // 濮嬬粓缂撳啿鍒版爣绛剧姸鎬侊紙璺ㄦ爣绛惧垏鎹㈡椂鎭㈠鐢級
           const state = this.streamingStates.get(tabId);
           if (state) state.content += text;
-          // 仅在活跃且不在切换中时增量渲染
+          // 浠呭湪娲昏穬涓斾笉鍦ㄥ垏鎹腑鏃跺閲忔覆鏌?
           if (!this.isSwitchingTab && this.isSenderTabActive()) {
             this.messageRenderer?.appendText(text);
           }
@@ -723,25 +721,25 @@ export class KiloCodeView extends ItemView {
           return this.approvalManager.requestApproval(request);
         },
       },
-      generation,    // 传入 generation 进行冲突保护
+      generation,    // 浼犲叆 generation 杩涜鍐茬獊淇濇姢
       );
 
-      // 确保 streaming 状态被重置
+      // 纭繚 streaming 鐘舵€佽閲嶇疆
       activeTab.setStreaming(false);
       this.updateButtonStates();
 
-      // 清理流状态缓冲
+      // 娓呯悊娴佺姸鎬佺紦鍐?
       this.streamingStates.delete(tabId);
 
-      // 流完成后做最终 Markdown 渲染（仅当发送者标签仍活跃时）
+      // 娴佸畬鎴愬悗鍋氭渶缁?Markdown 娓叉煋锛堜粎褰撳彂閫佽€呮爣绛句粛娲昏穬鏃讹級
       if (this.isSenderTabActive()) {
         this.messageRenderer?.finalizeMessage();
       }
 
-      // 6. 保存助手消息到会话
+      // 6. 淇濆瓨鍔╂墜娑堟伅鍒颁細璇?
       await this.conversationController.addMessage(assistantMessage);
 
-      // 清除图片
+      // 娓呴櫎鍥剧墖
       this.imageContext.clearImages();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -751,28 +749,85 @@ export class KiloCodeView extends ItemView {
       this.streamingStates.delete(tabId);
       this.updateButtonStates();
     } finally {
-      // 确保 streaming 状态一定被重置（无论成功、异常、或 cancel）
+      // 纭繚 streaming 鐘舵€佷竴瀹氳閲嶇疆锛堟棤璁烘垚鍔熴€佸紓甯搞€佹垨 cancel锛?
       if (activeTab.state.isStreaming) {
         activeTab.setStreaming(false);
       }
       this.streamingStates.delete(tabId);
       this.updateButtonStates();
-      // 清除发送者标签 ID
+      // 娓呴櫎鍙戦€佽€呮爣绛?ID
       this.senderTabId = null;
     }
   }
 
   // ============================================
-  // 工具调用渲染
+  // 宸ュ叿璋冪敤娓叉煋
   // ============================================
 
-  /** 渲染工具调用卡片 */
+  /** 娓叉煋宸ュ叿璋冪敤鍗＄墖 */
+  
+  private async handleModelSwitch(): Promise<void> {
+    // Dynamically import to avoid issues with require() type
+    const Modal = (this.app as any).plugins?.plugins?.["obsidian"]?.Modal || (globalThis as any).Modal;
+    const runtime = this.inputController.getRuntime();
+    const currentModel = this.plugin.settings.defaultModel || "";
+
+    class ModelSelectModal extends (this.app as any).Modal {
+      result: string;
+      resolve: (v: string | null) => void;
+      constructor(app: any) { super(app); this.result = currentModel; this.resolve = (v: any) => {}; }
+      onOpen() {
+        const contentEl = this.contentEl;
+        contentEl.createEl("h2", { text: "Switch AI Model" });
+        contentEl.createEl("p", { 
+          text: "Enter model ID (e.g. kilocode/anthropic/claude-sonnet-4) or leave empty for CLI default.",
+          cls: "kilo-setting-note"
+        });
+        const input = contentEl.createEl("input", {
+          type: "text",
+          placeholder: "kilocode/anthropic/claude-sonnet-4",
+          cls: "kilo-input"
+        });
+        input.value = currentModel;
+        input.style.width = "100%";
+        input.style.marginBottom = "12px";
+        const applyBtn = contentEl.createEl("button", { text: "Apply", cls: "kilo-btn kilo-btn-primary" });
+        applyBtn.onclick = () => { (this as any).result = (input.value || '') as string; this.close(); };
+        const cancelBtn = contentEl.createEl("button", { text: "Cancel", cls: "kilo-btn" });
+        cancelBtn.onclick = () => { this.result = currentModel; this.close(); };
+        input.addEventListener("keydown", (e: KeyboardEvent) => {
+          if (e.key === "Enter") { this.result = input.value || ""; this.close(); }
+        });
+      }
+      onClose() {
+        const resolve = (this as any).resolve;
+        if (resolve) (resolve as any)(this.result);
+      }
+    }
+
+    const modal = new ModelSelectModal(this.app);
+    const result: string = await new Promise<string>((resolve) => {
+      (modal as any).resolve = resolve;
+      modal.open();
+    });
+
+    if (result !== currentModel) {
+      this.plugin.settings.defaultModel = result;
+      await this.plugin.saveSettings();
+      if (runtime?.setModel) {
+        runtime.setModel(result);
+      }
+      runtime?.resetSession();
+      new Notice("Model set to: " + (result || "CLI default"));
+    }
+  }
+
   private renderToolCall(toolCall: ToolCallInfo): void {
     if (!this.messagesEl) return;
 
     let lastMessage = this.messagesEl.querySelector('.kilo-message:last-child');
     if (!lastMessage) {
-      // 如果没有消息元素，创建一个助手消息容器
+      // 濡傛灉娌℃湁娑堟伅鍏冪礌锛屽垱寤轰竴涓姪鎵嬫秷鎭鍣?
       const msgEl = this.messagesEl.createDiv({ cls: 'kilo-message kilo-message-assistant' });
       msgEl.createDiv({ cls: 'kilo-message-content' });
       lastMessage = msgEl;
@@ -787,29 +842,29 @@ export class KiloCodeView extends ItemView {
     toolEl.setAttribute('data-tool-id', toolCall.id);
     const headerEl = toolEl.createDiv({ cls: 'kilo-tool-header' });
     headerEl.createSpan({ cls: 'kilo-tool-name', text: toolCall.name });
-    headerEl.createSpan({ cls: 'kilo-tool-status', text: '🔄 Running' });
+    headerEl.createSpan({ cls: 'kilo-tool-status', text: '馃攧 Running' });
   }
 
-  /** 更新工具调用结果 */
+  /** 鏇存柊宸ュ叿璋冪敤缁撴灉 */
   private updateToolCallResult(toolCallId: string, result: string): void {
     const toolEl = this.containerEl.querySelector(`[data-tool-id="${toolCallId}"]`);
     if (toolEl) {
       const statusEl = toolEl.querySelector('.kilo-tool-status');
-      if (statusEl) statusEl.textContent = '✅ Done';
+      if (statusEl) statusEl.textContent = '鉁?Done';
     }
   }
 
   // ============================================
-  // 其他操作
+  // 鍏朵粬鎿嶄綔
   // ============================================
 
-  /** 处理取消 */
+  /** 澶勭悊鍙栨秷 */
   private handleCancel(): void {
     this.inputController.cancel();
     this.streamController.cancel();
   }
 
-  /** 处理图片附件 */
+  /** 澶勭悊鍥剧墖闄勪欢 */
   private async handleAttachImage(): Promise<void> {
     await this.imageContext.addFromFile();
     if (this.inputContainerEl) {
@@ -817,32 +872,32 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 处理当前笔记切换 */
+  /** 澶勭悊褰撳墠绗旇鍒囨崲 */
   private handleToggleCurrentNote(): void {
     this.currentNoteContext.toggle();
   }
 
-  /** 触发 mention */
+  /** 瑙﹀彂 mention */
   private triggerMention(): void {
     new Notice('Mention feature coming soon');
   }
 
-  /** 触发斜杠命令 */
+  /** 瑙﹀彂鏂滄潬鍛戒护 */
   private triggerSlashCommand(): void {
     new Notice('Slash commands coming soon');
   }
 
-  /** 触发指令模式 */
+  /** 瑙﹀彂鎸囦护妯″紡 */
   private triggerInstructionMode(): void {
     new Notice('Instruction mode coming soon');
   }
 
-  /** 附加文件 */
+  /** 闄勫姞鏂囦欢 */
   private attachFile(): void {
     new Notice('File attachment coming soon');
   }
 
-  /** 注册 Inline Edit 命令 */
+  /** 娉ㄥ唽 Inline Edit 鍛戒护 */
   private registerInlineEditCommand(): void {
     this.plugin.addCommand({
       id: 'inline-edit',
@@ -857,14 +912,14 @@ export class KiloCodeView extends ItemView {
     });
   }
 
-  /** 显示 Inline Edit 模态框 */
+  /** 鏄剧ず Inline Edit 妯℃€佹 */
   private showInlineEditModal(selectedText: string, editor: any): void {
     new InlineEditModal(this.app, selectedText, async (instruction) => {
-      // TODO: 调用 KiloCode CLI 进行 inline edit（Phase B 实现）
+      // TODO: 璋冪敤 KiloCode CLI 杩涜 inline edit锛圥hase B 瀹炵幇锛?
     }).open();
   }
 
-  /** 注册消息操作事件委托（事件冒泡捕获 rewind/fork/copy 按钮点击） */
+  /** 娉ㄥ唽娑堟伅鎿嶄綔浜嬩欢濮旀墭锛堜簨浠跺啋娉℃崟鑾?rewind/fork/copy 鎸夐挳鐐瑰嚮锛?*/
   private registerMessageActionListeners(): void {
     if (!this.messagesEl) return;
 
@@ -891,7 +946,7 @@ export class KiloCodeView extends ItemView {
     });
   }
 
-  /** 回退到指定消息 */
+  /** 鍥為€€鍒版寚瀹氭秷鎭?*/
   private async handleRewind(messageId: string): Promise<void> {
     const confirmed = confirm('Rewind to this message? All subsequent messages will be removed.');
     if (!confirmed) return;
@@ -905,7 +960,7 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 从指定消息处 fork 新会话 */
+  /** 浠庢寚瀹氭秷鎭 fork 鏂颁細璇?*/
   private async handleFork(messageId: string): Promise<void> {
     if (!this.tabManager.canCreateTab()) {
       new Notice('Maximum tabs reached. Close a tab first.');
@@ -919,7 +974,7 @@ export class KiloCodeView extends ItemView {
       const newTab = this.tabManager.createTab();
       newTab.setConversation(forked.id);
 
-      // 切换到 fork 的会话
+      // 鍒囨崲鍒?fork 鐨勪細璇?
       await this.conversationController.switchTo(forked.id);
       this.chatState.setConversationId(forked.id);
       this.restoreDraft('');
@@ -932,7 +987,7 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 复制消息内容到剪贴板 */
+  /** 澶嶅埗娑堟伅鍐呭鍒板壀璐存澘 */
   private async handleCopy(messageId: string): Promise<void> {
     const conversation = await this.conversationController.getConversation();
     if (!conversation) return;
@@ -944,3 +999,5 @@ export class KiloCodeView extends ItemView {
     new Notice('Copied to clipboard');
   }
 }
+
+

@@ -31,6 +31,10 @@ export interface ChatRuntime {
   isStreaming(): boolean;
   /** 发送审批决定（Phase C 预留） */
   sendApproval?(toolName: string, decision: 'allow' | 'deny'): void;
+  /** Set model ID (e.g. anthropic/claude-sonnet-4-20250514) */
+  setModel?(modelId: string): void;
+  /** Get current model ID */
+  getModel?(): string | null;
 }
 
 /** 消息上下文 */
