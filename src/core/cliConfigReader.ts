@@ -24,24 +24,74 @@ export interface CliConfig {
 
 /**
  * 获取 kilo CLI 配置文件路径。
- * 优先级：
- *   1. Windows: %APPDATA%/kilo/config.json
- *   2. Unix / fallback: $HOME/.config/kilo/config.json
+ * 优先级（按文件名优先级）：
+ *   1. Windows: %APPDATA%/kilo/kilo.jsonc
+ *   2. Windows: %APPDATA%/kilo/kilo.json
+ *   3. Windows: %APPDATA%/kilo/config.json
+ *   4. Unix: $HOME/.config/kilo/kilo.jsonc
+ *   5. Unix: $HOME/.config/kilo/kilo.json
+ *   6. Unix: $HOME/.config/kilo/config.json
+ *
+ * KiloCode CLI 实际使用 kilo.jsonc（JSON with Comments）作为配置文件名。
  */
 export function getCliConfigPath(): string {
+  const candidates: string[] = [];
+
   // Windows 优先 %APPDATA%
   if (process.platform === 'win32' && process.env.APPDATA) {
-    const appDataPath = path.join(process.env.APPDATA, 'kilo', 'config.json');
-    if (fs.existsSync(appDataPath)) return appDataPath;
+    const appDataDir = path.join(process.env.APPDATA, 'kilo');
+    candidates.push(
+      path.join(appDataDir, 'kilo.jsonc'),
+      path.join(appDataDir, 'kilo.json'),
+      path.join(appDataDir, 'config.json'),
+    );
   }
 
-  // 跨平台标准路径：~/.config/kilo/config.json
-  const homeDir = os.homedir();
-  return path.join(homeDir, '.config', 'kilo', 'config.json');
+  // ~/.config/kilo/
+  const configDir = path.join(os.homedir(), '.config', 'kilo');
+  candidates.push(
+    path.join(configDir, 'kilo.jsonc'),
+    path.join(configDir, 'kilo.json'),
+    path.join(configDir, 'config.json'),
+  );
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  // 都不存在时返回最后一个作为默认路径
+  return candidates[candidates.length - 1];
+}
+
+/**
+ * 尝试以 JSON 和 JSONC（去除注释）两种方式解析配置文本。
+ */
+function parseConfigText(raw: string): CliConfig | null {
+  // 先试标准 JSON
+  try {
+    return JSON.parse(raw) as CliConfig;
+  } catch {
+    // 不是标准 JSON，尝试去除注释后解析（JSONC 支持）
+  }
+
+  // 简单去注释 + 去尾部逗号后解析（覆盖 JSONC 语法）
+  try {
+    // 注意：不能直接用 \/\/.*$ 匹配所有 //，因为 URL（如 https://）中包含 //
+    // 只匹配前面有空格的 // 注释，或行首的 //
+    const cleaned = raw
+      .replace(/[ \t]\/\/[^\n]*$/gm, '')              // 去掉 // 注释（前面有空格/tab）
+      .replace(/^\/\/[^\n]*$/gm, '')                   // 去掉行首的 // 注释
+      .replace(/\/\*[\s\S]*?\*\//g, '')                // 去掉 /* */ 注释
+      .replace(/,(\s*[}\]])/g, '$1');                  // 去掉尾部逗号
+    return JSON.parse(cleaned) as CliConfig;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * 读取 kilo CLI 配置文件。
+ * 支持 kilo.jsonc（JSON with Comments）和标准 .json 格式。
  * @returns 解析后的 CLI 配置对象，文件不存在或解析失败返回空对象。
  */
 export function readCliConfig(): CliConfig {
@@ -54,11 +104,17 @@ export function readCliConfig(): CliConfig {
     }
 
     const raw = fs.readFileSync(configPath, 'utf-8');
-    const config = JSON.parse(raw) as CliConfig;
+    const config = parseConfigText(raw);
 
-    if (typeof config !== 'object' || config === null) {
-      console.warn('[KiloCode] CLI config is not a JSON object:', configPath);
+    if (!config) {
+      console.warn('[KiloCode] Failed to parse CLI config:', configPath);
       return {};
+    }
+
+    // 将 JSONC 中的 model 字段映射到 defaultModel
+    // kilo.jsonc 使用 model 字段，插件使用 defaultModel
+    if (!config.defaultModel && (config as any).model) {
+      config.defaultModel = (config as any).model;
     }
 
     console.debug('[KiloCode] Read CLI config from:', configPath, {

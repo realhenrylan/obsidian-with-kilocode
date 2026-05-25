@@ -18,7 +18,7 @@
   <a href="https://github.com/realhenrylan/obsidian-with-kilocode/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
   <a href="https://github.com/realhenrylan/obsidian-with-kilocode/stargazers"><img src="https://img.shields.io/github/stars/realhenrylan/obsidian-with-kilocode?style=flat-square&color=FFB800" alt="Stars"></a>
   <a href="https://github.com/realhenrylan/obsidian-with-kilocode/issues"><img src="https://img.shields.io/github/issues/realhenrylan/obsidian-with-kilocode?style=flat-square" alt="Issues"></a>
-  <a href="https://obsidian.md/plugins?id=kilocode"><img src="https://img.shields.io/badge/Obsidian-Community%20Plugin-purple?style=flat-square&logo=obsidian" alt="Obsidian Plugin"></a>
+  <a href="https://obsidian.md/plugins?发现问题：一个session的回答会出现在另外一个session当中id=kilocode"><img src="https://img.shields.io/badge/Obsidian-Community%20Plugin-purple?style=flat-square&logo=obsidian" alt="Obsidian Plugin"></a>
 </p>
 
 ---
@@ -206,15 +206,7 @@ Open Settings → KiloCode to configure:
 | **CLI Path** | Path to KiloCode CLI (leave empty for auto-detect) | Auto-detect |
 | **Download Mirror URL** | Custom mirror URL for CLI binary download | npm registry |
 | **Auto Start** | Start CLI on vault open | Off |
-
-#### API Configuration
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **API Key** | Your API key (password field) | - |
-| **Base URL** | Custom API base URL | - |
-
-> **Note**: `kilo serve` manages its own credentials independently (via CLI keychain or config files). You only need to fill in API Key / Base URL here to **override** the CLI's defaults. If left empty, the plugin uses the CLI's existing credentials automatically.
+| **API Key** | Your API key | - |
 
 #### Chat
 
@@ -249,7 +241,7 @@ Open Settings → KiloCode to configure:
 Configure environment variables in Settings → Environment:
 
 - **Shared** — Applied to all providers
-- **KiloCode** — Applied to KiloCode provider only. Passes `KILO_API_KEY` and `KILO_BASE_URL` from settings to the `kilo serve` process when configured; otherwise the CLI uses its own stored credentials. Working directory is set to vault path.
+- **KiloCode** — Applied to KiloCode provider only
 
 ### MCP Servers
 
@@ -354,7 +346,7 @@ styles.css                             # Global styles (brand theme, light/dark)
 User Input → KiloCodeView
   → PlanModeController (inject mode prefix)
   → ConversationService (persist user message)
-  → KiloCodeChatRuntime (HTTP serve → CLI via Node.js http module)
+  → KiloCodeChatRuntime (JSON-RPC over stdio → CLI)
   → AsyncGenerator<StreamChunk>
   → StreamController (consume chunks, assemble Message)
   → MessageRenderer (incremental UI updates)
@@ -372,7 +364,7 @@ User Input → KiloCodeView
 | **npmDownloader** | Downloads npm tarballs, decompresses gzip, parses tar format to extract platform binary |
 | **ProviderRegistry** | Static registry managing AI provider registration. Providers self-register at plugin load. |
 | **ChatRuntime** (interface) | AsyncGenerator-based protocol (`sendMessage` returns `AsyncGenerator<StreamChunk>`). Supports `start/stop/cancel/resetSession/sendApproval`. |
-| **KiloCodeChatRuntime** | Concrete implementation — spawns `kilo serve` HTTP server, communicates via HTTP POST with SSE/ndjson streaming. Uses Node.js `http` module to bypass Electron renderer CORS restrictions (`app://obsidian.md` origin). |
+| **KiloCodeChatRuntime** | Concrete implementation — spawns CLI child process, communicates via JSON-RPC over stdio. Uses internal pendingChunks + resolveNext queue to bridge stdout events to generator consumption. |
 | **StreamController** | Consumes `AsyncGenerator<StreamChunk>`, handles text/tool_use/tool_result/error/done/approval_required chunk types. Supports AbortController-based cancellation. |
 | **ConversationService** | Full CRUD for conversations with Promise-queue concurrency protection. Stores sessions as JSON files in `.kilocode/sessions/`. Supports fork, rewind, compact, resume operations. |
 | **TabManager** | Manages multiple chat tabs (create/close/switch), persists tab state across sessions. |
@@ -389,7 +381,7 @@ User Input → KiloCodeView
 - **Promise queue**: `ConversationService` uses sequential Promise execution to prevent concurrent modification race conditions
 - **Virtual scrolling**: Auto-enabled when message list exceeds 50 items, only renders viewport-visible messages
 - **CustomEvent bubbling**: Components communicate via DOM CustomEvents for loose coupling
-- **Node.js `http` module (vs. `fetch`)**: `KiloCodeChatRuntime` uses Node.js `http` for HTTP requests instead of browser `fetch()`, because Electron's renderer process enforces CORS — the `app://obsidian.md` origin cannot access `http://127.0.0.1`. Node.js `http` runs entirely outside the browser security boundary, avoiding CORS entirely.
+- **Partial line buffering**: `KiloCodeChatRuntime` buffers incomplete stdout lines to prevent JSON parse failures
 - **Binary auto-download**: `BinaryManager` uses npm registry as primary source (no extra CI needed), falls back to user-configured mirror URL; lazy path resolution in `start()` keeps `createRuntime` synchronous
 
 ---
@@ -533,7 +525,7 @@ Adding a new language:
 - [x] Virtual scrolling for large conversations
 - [x] Error handling with severity levels
 - [x] CLI binary auto-download (zero-config setup)
-- [x] Streaming performance optimization (rAF scroll throttle, debounced writes, SSE chunk merge)
+- [ ] Performance optimization for large vaults
 - [ ] Additional language support
 - [ ] Custom theme support
 - [ ] Plugin API for third-party extensions

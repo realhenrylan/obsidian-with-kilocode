@@ -62,7 +62,7 @@ jest.mock('http', () => {
     return req;
   }
 
-  return { request };
+  class Agent { constructor(){} destroy=jest.fn(); }; return { request, Agent };
 });
 
 import { spawn } from 'child_process';

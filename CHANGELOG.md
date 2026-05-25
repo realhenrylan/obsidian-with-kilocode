@@ -6,6 +6,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **SSE stream cancel fix**: added res.on(close) handler in KiloCodeChatRuntime.request() ReadableStream. Without it req.destroy() leaves stream hanging, blocking all subsequent AI responses.
+
+### Added
+
+- **多 Runtime 支持 v1 (T3.2)**: 每个聊天标签拥有独立的 `kilo serve` 进程，实现真正的多会话并行。`Tab` 类新增 `runtime` 字段和 `disposeRuntime()` 方法；`TabManager.closeTab()` 改为 async 并在关闭标签时自动停止对应进程；`KiloCodeView.getOrCreateRuntime()` 改为按标签创建/获取 runtime；`main.ts` 改为管理 `Set<ChatRuntime>` 集合，`onunload()` 停止所有运行中进程。新增 8 个单元测试覆盖独立 sessionId、标签切换、关闭清理、进程泄露检测。
+
+- **技能编目系统 v1 (T3.3)**: 新增 `src/providers/kilocode/runtime/SkillCatalog.ts`，提供 4 个预定义官方技能（frontmatter、vault-org、obsidian-search、template-engine），每个技能含完整模板内容。新增 `installSkill()` 安装函数（已存在跳过，不覆盖用户修改）。新增 4 个 Obsidian 命令：`List available skills`、`Install skill...`、以及每个技能独立的 `Install skill: <name>` 命令。新增 7 个单元测试覆盖编目列表、安装新建、未知技能、已存在跳过、已安装检测。
+
+  - `buildReviewPrompt()` — 构建结构化审查 Prompt（含用户请求、文件列表、READ-ONLY 约束）
+  - `parseReviewResponse()` — 解析审查回复（`'LGTM'` 通过 / 问题列表）
+  - `extractEditedFiles()` — 从助手消息的 toolCalls 中提取 `write_file`/`edit_file` 路径
+  - `runReview()` — 创建独立 Runtime 执行审查，完成后自动 stop，stream 失败也确保清理
+
+- **技能热重载 (SkillWatcher)**: 新增 `src/providers/kilocode/runtime/SkillWatcher.ts`，使用 Node.js 内置 `fs.watch(recursive: true)` 监控 `.kilo/skills/` 目录变更，300ms 防抖后自动调用 `invalidateSkillsCache()`。用户在编辑 SKILL.md 或新增技能目录后，下一次 `sendMessage()` 立即使用新内容，无需重启 Obsidian。集成到 `main.ts` — `onload()` 中启动 watcher，`onunload()` 中 `dispose()`。
+
+- **预热优化 v2 (Early Warmup)**: `main.ts` 新增后台预热机制，`onload()` 末尾调用 `scheduleWarmup()`，延迟 1 秒后在后台创建并启动 `kilo serve` 进程。仅在 `autoStart=true` 时执行。预热创建的 runtime 通过 `warmupRuntimeRef` 公开字段共享给 `KiloCodeView` — `getOrCreateRuntime()` 优先认领预热 runtime，免去 spawn + 端口发现 + HTTP 就绪 + session 创建的全链路冷启动延迟。预热失败静默处理，不影响 View 正常创建流程。`onunload()` 中清理未认领的预热定时器和 runtime。
+
+- **事件缓冲器 v1 (EventBuffer)**: 新增 `src/providers/kilocode/runtime/EventBuffer.ts` 模块，在 `sendMessage()` 流式消费过程中逐块记录每个 `StreamChunk`，支持 500 事件滚动窗口。`getSince(seq)` 二分查找高效查询，`replay(seq)` 返回纯 chunk 数组供 View 渲染。`KiloCodeChatRuntime` 集成：每个 `yield` 后追加到 buffer、`stop()` 时清空。`KiloCodeView.handleTabClick()` 集成：标签切换时从 EventBuffer 恢复未渲染的流内容。覆盖率 Statements 97.14%、Branches 100%。
+
+- **HTTP Keep-Alive 连接池**: `KiloCodeChatRuntime` 构造函数创建 `http.Agent({ keepAlive: true, keepAliveMsecs: 30000, maxSockets: 1 })`，所有 HTTP 请求复用单 TCP socket，减少三次握手开销。`stop()` 时调用 `agent.destroy()` 清理连接。
+- **技能目录系统 v1**: 新增 `SkillLoader` 模块（`src/providers/kilocode/runtime/SkillLoader.ts`），从 `.kilo/skills/*/SKILL.md` 目录结构加载技能文件。零依赖 frontmatter 解析，30 秒 TTL 缓存，提供 `invalidateSkillsCache()` 支持热重载。
+- **技能上下文注入**: `KiloCodeChatRuntime` 的 `buildMessagePayload()` 自动加载并注入技能上下文。`kilocode-core` 技能完整注入作为系统指令，其他 specialist 技能以目录列表形式注入。
+- **核心技能文件**: 新增 `.kilo/skills/kilocode-core/SKILL.md`，定义基本原则、Obsidian 专业知识、Anti-patterns 硬性规则和对话行为。
+- **结构化提问协议**: 新增 `src/providers/kilocode/runtime/prompts.ts`，定义 `QUESTION_PROTOCOL` 常量并集成到 `buildSkillsContext()`，注入在技能上下文之后、用户消息之前。协议指导 Agent 使用 "Decide for me" 和 "Explore options" 格式的结构化多选问题。
+
+- **KiloCode Obsidian 插件改进方案文档**: 新增 `docs/kilocode-improvement-plan.md`，基于对 OpenDesign/OpenDesignr 的深度技术分析，针对 KiloCode 子进程架构提出了 9 项具体改进方案：技能目录系统（`.kilo/skills/*/SKILL.md`）、HTTP 连接池化、结构化事件缓冲、Anti-pattern Rules、启动预热优化、会话续接、结构化提问协议、验证器子代理（Review Loop）。含三阶段实施计划和详细的伪代码实现。
+
+- **OpenDesign Agent CLI 深度技术分析文档**（第三版）: `docs/opendesign-agent-cli-analysis.md` 追加了 14 个源代码文件的精确分析，包括 5 个平台的插件接入机制（Gemini 仅 281 字节）、4 个 Provider 的完整源代码（Claude SDK/Codex SDK/OpenCode API/NVIDIA API）、进程内 MCP Server 的内存对象架构、端到端延迟毫秒级分解。
+
+### Added
+
+- **OpenDesign 项目 Agent CLI 集成分析文档**: 新增 `docs/opendesign-agent-cli-analysis.md`，深入分析了 [manalkaff/opendesign](https://github.com/manalkaff/opendesign) 和 [opendesignr/opendesignr](https://github.com/opendesignr/opendesignr) 两个项目的 Agent CLI 集成架构，涵盖：纯技能化插件系统（跨 5 个平台分发）、MCP 服务器（19+ 工具直接驱动）、聊天抽屉 SSR 流式集成、技能自动发现与编目系统、以及验证器子代理（Review Loop）模式。分析报告包含了对当前项目的 6 条可直接采用的设计模式和 4 层建议集成架构。
+
+### Added
+
+- **空闲超时自动停止 `kilo serve`** (token 节省): `KiloCodeChatRuntime` 新增空闲超时机制，消息完成后 N 秒自动停止 `kilo serve` 进程，避免持续消耗 token。`sendMessage()` 结束时启动定时器，下次发消息自动取消并重启进程。超时时间通过设置面板 `Idle Timeout` 滑块可配置（0-600 秒，默认 120 秒/2 分钟）。`main.ts` `onunload()` 添加兜底清理，确保 Obsidian 关闭时直接杀死子进程而非依赖视图清理。`KiloCodeView` 创建 runtime 后注册到插件，使插件层可追踪进程生命周期。
+- **运行时预启动（冷启动预热）**: `KiloCodeView.onOpen()` 末尾 fire-and-forget 调用 `warmupRuntime()`，用户在打开聊天面板后的打字/思考期间在后台完成 CLI 进程启动，显著减少首次 Enter 到首 token 的等待时间。
+- **计时埋点（performance.now）**: `KiloCodeChatRuntime.startServer()` 输出各阶段耗时（getBinaryPath/waitForPort/waitForHttpReady/createSession）；`KiloCodeChatRuntime.sendMessage()` 输出 buildPayload/httpRequest/timeToFirstToken；`KiloCodeView.handleSend()` 输出 runtimeAcquisition + timeToFirstChunk。帮助定位冷启动和消息传输中的性能瓶颈。
+
+### Changed
+
+- **空闲超时默认值延长**: `idleTimeoutSeconds` 从 120 秒改为 600 秒（10 分钟），减少日常聊天停顿触发热启动的频率。
+- **端口发现加速**: `PORT_DISCOVERY_DELAY_MS` 从 1500ms 降低到 300ms，后备端口扫描提前触发。
+- **HTTP 就绪探测加速**: `waitForHttpReady()` 轮询间隔从固定 200ms 改为指数退避 50ms→100ms→200ms，平衡快速检测和总线压力。
+
 ### Changed
 
 - **模型覆盖修复**: 插件不再硬编码 `modelID` 覆盖 `kilo serve` CLI 自身配置。`defaultModel` 默认值从 `'claude-sonnet-4-20250514'` 改为空字符串。当用户在插件设置中未显式配置模型时，API 请求不发送 `modelID` 字段，让 CLI 使用其配置文件中的默认模型。设置面板模型下拉框新增 "Use CLI default" 选项。`KiloCodeChatRuntime` 构造函数改为接受设置 getter 函数 `() => KiloCodeSettings` 而非快照对象，确保运行时始终使用最新设置。

@@ -7,7 +7,7 @@ import { VIEW_TYPE_KILOCODE } from '../../core/types';
 import type { ToolCallInfo, Message } from '../../core/types';
 import type KiloCodePlugin from '../../main';
 import { TabManager } from './tabs/TabManager';
-import { StreamController } from './controllers/StreamController';
+import { StreamController, type StreamCallbacks } from './controllers/StreamController';
 import { InputController } from './controllers/InputController';
 import { ConversationController } from './controllers/ConversationController';
 import { ConversationService } from './services/ConversationService';
@@ -19,6 +19,7 @@ import { CLIErrorHandler } from '../../shared/ErrorNotice';
 import { PlanModeController } from './PlanModeController';
 import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import type { ChatRuntime } from '../../core/providers/types';
+import { extractEditedFiles, runReview } from '../../providers/kilocode/runtime/ReviewLoop';
 
 /** 按 Tab 缓冲的流式状态（用于跨标签流式恢复） */
 interface TabStreamingState {
@@ -151,13 +152,44 @@ export class KiloCodeView extends ItemView {
       this.chatState.setConversationId(activeTab.state.conversationId);
       void this.conversationController.restoreConversation(activeTab.state.conversationId);
     }
+
+    // 后台预热 CLI 进程：冷启动发生在用户打字/思考期间，而非按 Enter 时
+    // 通过 void 显式不 await，不阻塞视图初始化
+    void this.warmupRuntime();
+  }
+
+  /**
+   * 后台预热 CLI 进程（fire-and-forget）。
+   * 用户在打字/思考阅读时异步完成 runtime 启动，确保首次 Enter 时零冷启动延迟。
+   *
+   * 仅在二进制已缓存（之前成功下载过）时执行预热，避免在未缓存时触发下载
+   * 导致 "download failed" Notice 弹窗。首次使用时的下载交给 handleSend() 处理，
+   * 那里有更合适的错误提示时机。
+   */
+  private async warmupRuntime(): Promise<void> {
+    if (!this.plugin.binaryManager.isReady()) {
+      console.log('[KiloCodeView] Binary not cached yet, skipping warmup (download deferred to first send)');
+      return;
+    }
+    try {
+      const runtime = await this.getOrCreateRuntime();
+      if (runtime) {
+        console.log('[KiloCodeView] Runtime warmed up in background');
+      }
+    } catch (err) {
+      // 预热失败不阻塞 UI，getOrCreateRuntime() 在 handleSend() 中会重试并报错
+      console.warn('[KiloCodeView] Background runtime warmup failed (will retry on send):', err);
+    }
   }
 
   async onClose(): Promise<void> {
     this.streamController.cancel();
     this.approvalManager.cancelAll();
-    this.inputController.cancel();
     this.streamingStates.clear();
+    // 清理所有标签的独立 runtime（T3.2 多 Runtime 支持）
+    for (const tab of this.tabManager.getAllTabs()) {
+      await tab.disposeRuntime();
+    }
     // 通过 ConversationController 刷新待写入的会话数据
     await this.conversationController.save();
     this.messageRenderer = null;
@@ -494,6 +526,7 @@ export class KiloCodeView extends ItemView {
       this.chatState.setConversationId(tab.state.conversationId ?? null);
 
       // 如果目标标签有正在进行的流，重建流式渲染状态
+      let recoveredFromState = false;
       if (tab.state.isStreaming) {
         const state = this.streamingStates.get(tabId);
         if (state) {
@@ -506,6 +539,38 @@ export class KiloCodeView extends ItemView {
           }
           for (const toolCall of state.toolCalls.values()) {
             this.renderToolCall(toolCall);
+          }
+          recoveredFromState = true;
+        }
+      }
+
+      // EventBuffer 恢复：当 streaming state 已被清理（流在后台完成）时，
+      // 从目标标签的 Runtime 事件缓冲器恢复未渲染的流内容
+      if (!recoveredFromState) {
+        const runtime = tab.runtime;
+        if (runtime && 'eventBuffer' in runtime) {
+          const eb = (runtime as any).eventBuffer;
+          if (eb && eb.length > 0) {
+            const chunks = eb.replay(-1);
+            // 只在实际有 buffer 内容且消息容器为空（避免与已加载会话重复）时恢复
+            const hasSavedMessages = (this.messagesEl?.children.length ?? 0) > 0;
+            if (chunks.filter((c: any) => c.type !== 'done').length > 0 && !hasSavedMessages) {
+              this.messageRenderer?.addAssistantMessage();
+              for (const chunk of chunks) {
+                switch (chunk.type) {
+                  case 'text':
+                    this.messageRenderer?.appendText(chunk.content || '');
+                    break;
+                  case 'thinking':
+                    this.messageRenderer?.appendThinking(chunk.content || '');
+                    break;
+                  case 'tool_use':
+                    if (chunk.toolCall) this.renderToolCall(chunk.toolCall);
+                    break;
+                  // done/error 类型不渲染
+                }
+              }
+            }
           }
         }
       }
@@ -556,20 +621,36 @@ export class KiloCodeView extends ItemView {
     return this.tabManager.getActiveTab()?.id === this.senderTabId;
   }
 
-  /** 获取或启动 ChatRuntime */
+  /** 获取或启动当前标签的 ChatRuntime（每标签独立实例） */
   private async getOrCreateRuntime(): Promise<ChatRuntime | null> {
-    const runtime = this.inputController.getRuntime();
-    if (runtime) return runtime;
+    const activeTab = this.tabManager.getActiveTab();
+    if (!activeTab) return null;
+
+    // 如果标签已有 runtime，直接返回
+    if (activeTab.runtime) return activeTab.runtime;
+
+    // 检查插件是否有预热好的 runtime（autoStart=true 时在插件加载时后台启动）。
+    // 预热 runtime 已处于 start() 完成状态，免去了 spawn + 端口发现 + HTTP 就绪的延迟。
+    // 预热 runtime 只给第一个标签使用。
+    if (this.plugin.warmupRuntimeRef) {
+      const warmedUp = this.plugin.warmupRuntimeRef;
+      this.plugin.warmupRuntimeRef = null;
+      activeTab.runtime = warmedUp;
+      this.plugin.addKilocodeRuntime(warmedUp);
+      return warmedUp;
+    }
 
     const registration = ProviderRegistry.get('kilocode');
     if (!registration) return null;
 
     const newRuntime = registration.createRuntime();
-    this.inputController.setRuntime(newRuntime);
+    activeTab.runtime = newRuntime;
+    this.plugin.addKilocodeRuntime(newRuntime);
 
     try {
       await newRuntime.start();
     } catch (err) {
+      activeTab.runtime = null;
       console.error('[KiloCodeView] Failed to start runtime:', err);
       return null;
     }
@@ -578,15 +659,16 @@ export class KiloCodeView extends ItemView {
   }
 
   /**
-   * 重启 CLI 进程。
+   * 重启当前标签的 CLI 进程。
    * kilo serve 只在启动时读取一次配置文件，之后修改 ~/.config/kilo/config.json
    * 不会自动生效。调用此方法可以停止当前进程并让下一次 getOrCreateRuntime() 创建新进程。
    */
   async restartRuntime(): Promise<void> {
-    const runtime = this.inputController.getRuntime();
+    const activeTab = this.tabManager.getActiveTab();
+    const runtime = activeTab?.runtime;
     if (runtime) {
       await runtime.stop();
-      this.inputController.setRuntime(null);
+      if (activeTab) activeTab.runtime = null;
     }
     new Notice('KiloCode CLI configuration reloaded. The CLI will restart on next message.');
   }
@@ -608,6 +690,7 @@ export class KiloCodeView extends ItemView {
 
     // 记录发送者标签 ID（在 try 外定义，供 catch/finally 使用）
     const tabId = activeTab.id;
+    const tUserSend = performance.now();
 
     try {
       // 0. 递增流式代数（冲突保护）+ 记录发送者标签 ID
@@ -657,6 +740,7 @@ export class KiloCodeView extends ItemView {
         new Notice('KiloCode CLI not available');
         return;
       }
+      const t1 = performance.now();
 
       this.approvalManager.setPermissionMode(this.plugin.settings.permissionMode);
 
@@ -670,18 +754,24 @@ export class KiloCodeView extends ItemView {
       this.updateButtonStates();
 
       // 创建空的助手消息容器（流式渲染目标，仅当前标签即发送者时创建）
+      let isFirstChunk = true;
       if (this.isSenderTabActive()) {
         this.messageRenderer?.addAssistantMessage();
       }
 
       // 设置审批决定回调
       this.streamController.setApprovalDecisionCallback((toolName, decision) => {
-        const rt = this.inputController.getRuntime();
+        const rt = activeTab.runtime;
         rt?.sendApproval?.(toolName, decision as 'allow' | 'deny');
       });
 
-      const assistantMessage = await this.streamController.consumeStream(generator, {
+      const consumeCallbacks: StreamCallbacks = {
         onText: (text) => {
+          if (isFirstChunk) {
+            isFirstChunk = false;
+            const ttf = performance.now();
+            console.log('[KiloCodeTiming] handleSend: timeToFirstChunk=', `${(ttf - tUserSend).toFixed(0)}ms`, '| runtimeAcquisition=', `${(t1 - tUserSend).toFixed(0)}ms`);
+          }
           // 始终缓冲到标签状态（跨标签切换时恢复用）
           const state = this.streamingStates.get(tabId);
           if (state) state.content += text;
@@ -691,6 +781,11 @@ export class KiloCodeView extends ItemView {
           }
         },
         onThinking: (text) => {
+          if (isFirstChunk) {
+            isFirstChunk = false;
+            const ttf = performance.now();
+            console.log('[KiloCodeTiming] handleSend: timeToFirstChunk=', `${(ttf - tUserSend).toFixed(0)}ms`, '| runtimeAcquisition=', `${(t1 - tUserSend).toFixed(0)}ms`);
+          }
           const state = this.streamingStates.get(tabId);
           if (state) state.thinking += text;
           if (!this.isSwitchingTab && this.isSenderTabActive()) {
@@ -722,8 +817,10 @@ export class KiloCodeView extends ItemView {
         onApprovalRequired: async (request) => {
           return this.approvalManager.requestApproval(request);
         },
-      },
-      generation,    // 传入 generation 进行冲突保护
+      };
+
+      const assistantMessage = await this.streamController.consumeStream(
+        generator, consumeCallbacks, generation,
       );
 
       // 确保 streaming 状态被重置
@@ -740,6 +837,28 @@ export class KiloCodeView extends ItemView {
 
       // 6. 保存助手消息到会话
       await this.conversationController.addMessage(assistantMessage);
+
+      // 7. 自动审查（可选）：提取编辑的文件并运行审查
+      if (this.plugin.settings.autoReview && runtime) {
+        const editedFiles = extractEditedFiles(assistantMessage);
+        if (editedFiles.length > 0) {
+          runReview({
+            userRequest: content,
+            editedFiles,
+            vaultPath: this.plugin.app.vault.getRoot().path,
+            createRuntime: () => {
+              const registration = ProviderRegistry.get('kilocode');
+              return registration!.createRuntime();
+            },
+          }).then((verdict) => {
+            if (verdict !== 'LGTM') {
+              new Notice('🔍 Review found issues:\n' + verdict, 8000);
+            }
+          }).catch((err) => {
+            console.warn('[KiloCodeView] Auto-review failed:', err);
+          });
+        }
+      }
 
       // 清除图片
       this.imageContext.clearImages();
@@ -805,7 +924,8 @@ export class KiloCodeView extends ItemView {
 
   /** 处理取消 */
   private handleCancel(): void {
-    this.inputController.cancel();
+    const activeTab = this.tabManager.getActiveTab();
+    activeTab?.runtime?.cancel();
     this.streamController.cancel();
   }
 

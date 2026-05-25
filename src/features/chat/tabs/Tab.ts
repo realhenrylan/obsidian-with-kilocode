@@ -1,3 +1,6 @@
+// src/features/chat/tabs/Tab.ts
+import type { ChatRuntime } from '../../../core/providers/types';
+
 export interface TabState {
   id: string;
   conversationId: string | null;
@@ -11,6 +14,7 @@ export interface TabState {
 
 export class Tab {
   readonly state: TabState;
+  runtime: ChatRuntime | null = null;
 
   constructor(id: string) {
     this.state = {
@@ -50,5 +54,17 @@ export class Tab {
     this.state.isStreaming = saved.isStreaming;
     this.state.draftMessage = saved.draftMessage;
     this.state.streamGeneration = saved.streamGeneration ?? 0;
+  }
+
+  /** 清理标签 runtime */
+  async disposeRuntime(): Promise<void> {
+    if (this.runtime) {
+      try {
+        await this.runtime.stop();
+      } catch {
+        // 静默处理
+      }
+      this.runtime = null;
+    }
   }
 }

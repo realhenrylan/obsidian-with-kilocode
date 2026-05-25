@@ -4,6 +4,9 @@ import type { KiloCodeSettings } from '../../../core/types';
 import { execFile, spawn, type ChildProcess } from 'child_process';
 import { randomBytes } from 'crypto';
 import http from 'http';
+import { loadSkills, type SkillMeta } from './SkillLoader';
+import { QUESTION_PROTOCOL } from './prompts';
+import { EventBuffer } from './EventBuffer';
 
 interface KiloModel {
   providerID: string;
@@ -18,7 +21,8 @@ interface ProviderListResponse {
 }
 
 const SERVER_READY_TIMEOUT_MS = 10000;
-const PORT_DISCOVERY_DELAY_MS = 1500;
+/** 后备端口扫描延迟（ms）：加速冷启动，让 CLI 先从 stdout 输出端口 */
+const PORT_DISCOVERY_DELAY_MS = 300;
 const DEFAULT_AGENT = 'code';
 const DEFAULT_PROVIDER = 'anthropic';
 
@@ -46,15 +50,33 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   private streaming = false;
   private abortController: AbortController | null = null;
   private providerCache: ProviderListResponse | null = null;
+  /** 空闲超时定时器。消息完�?N 秒后自动 stop() 以节�?token */
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** HTTP Keep-Alive 连接池：复用 TCP 连接减少三次握手开销 */
+  private httpAgent: http.Agent;
+
+  /**
+   * 事件缓冲器：记录 sendMessage() 流式过程中的每个 StreamChunk�?
+   * 公开 readonly 属性，View 层可通过 getEventBuffer() 访问�?
+   * 标签切换时，View 层从 buffer 恢复未完成的流内容�?
+   */
+  readonly eventBuffer = new EventBuffer();
 
   /**
    * @param binaryManager 二进制管理器
-   * @param getSettings 设置获取器——每次访问时调用，返回最新设置。不要传快照对象，
-   *                    否则用户修改设置后运行时不会生效。
+   * @param getSettings 设置获取器——每次访问时调用，返回最新设置。不要传快照对象�?
+   *                    否则用户修改设置后不会生效�?
    */
   constructor(binaryManager: BinaryManager, getSettings: () => KiloCodeSettings) {
     this.binaryManager = binaryManager;
     this.getSettings = getSettings;
+    // 创建 HTTP Keep-Alive Agent：单 socket + 30 秒保�?
+    // 为什么单 socket：kilo serve 是单线程事件循环，并行多�?socket 无意义且可能引入竞�?
+    this.httpAgent = new http.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 30000,
+      maxSockets: 1,
+    });
   }
 
   async start(): Promise<void> {
@@ -74,25 +96,35 @@ export class KiloCodeChatRuntime implements ChatRuntime {
 
   async stop(): Promise<void> {
     this.abortController?.abort();
+    this.clearIdleTimer();
     this.killProcess();
     this.resetServerState();
+    this.httpAgent.destroy();
+    // 停止时清空事件缓冲，标签切换恢复不再需�?
+    this.eventBuffer.clear();
   }
 
   async *sendMessage(content: string, context?: MessageContext): AsyncGenerator<StreamChunk> {
     await this.start();
+    // 要发消息了，取消空闲超时（防止在流式期间被超�?stop�?
+    this.clearIdleTimer();
 
     if (!this.serverBaseUrl || !this.sessionId) {
-      console.error('[KiloCodeChatRuntime] Not ready — serverBaseUrl:', this.serverBaseUrl, 'sessionId:', this.sessionId);
+      console.error('[KiloCodeChatRuntime] Not ready �?serverBaseUrl:', this.serverBaseUrl, 'sessionId:', this.sessionId);
       yield { type: 'error', error: 'KiloCode server is not ready' };
+      this.eventBuffer.append({ type: 'error', error: 'KiloCode server is not ready' });
       yield { type: 'done' };
+      this.eventBuffer.append({ type: 'done' });
       return;
     }
 
     this.streaming = true;
     this.abortController = new AbortController();
 
+    const t0 = performance.now();
     try {
       const payload = await this.buildMessagePayload(content, context);
+      const t1 = performance.now();
       const response = await this.request(`/session/${encodeURIComponent(this.sessionId)}/message`, {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -101,40 +133,61 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         },
         signal: this.abortController.signal,
       });
+      const t2 = performance.now();
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         console.error('[KiloCodeChatRuntime] HTTP error:', response.status, errorText.slice(0, 200));
-        yield {
+        const errChunk: StreamChunk = {
           type: 'error',
           error: `KiloCode HTTP API returned ${response.status}${errorText ? `: ${errorText}` : ''}`,
         };
+        yield errChunk;
+        this.eventBuffer.append(errChunk);
         yield { type: 'done' };
+        this.eventBuffer.append({ type: 'done' });
         return;
       }
 
       const contentType = response.headers.get('content-type') ?? '';
 
-      let emitted = false;
+      let firstChunk = true;
       for await (const chunk of this.parseResponse(response)) {
-        emitted = true;
+        if (firstChunk) {
+          const ttfToken = performance.now();
+          console.log('[KiloCodeTiming] sendMessage:', {
+            buildPayload: `${(t1 - t0).toFixed(0)}ms`,
+            httpRequest: `${(t2 - t1).toFixed(0)}ms`,
+            timeToFirstToken: `${(ttfToken - t0).toFixed(0)}ms`,
+          });
+          firstChunk = false;
+        }
         yield chunk;
+        // 每块都追加到事件缓冲器，标签切换时从 buffer 恢复流内�?
+        this.eventBuffer.append(chunk);
       }
 
       yield { type: 'done' };
+      this.eventBuffer.append({ type: 'done' });
     } catch (error) {
       if (!this.abortController?.signal.aborted) {
-        yield { type: 'error', error: error instanceof Error ? error.message : String(error) };
+        const errChunk: StreamChunk = { type: 'error', error: error instanceof Error ? error.message : String(error) };
+        yield errChunk;
+        this.eventBuffer.append(errChunk);
       }
       yield { type: 'done' };
+      this.eventBuffer.append({ type: 'done' });
     } finally {
       this.streaming = false;
       this.abortController = null;
+      // 消息流已完成，启动空闲超时；下次 sendMessage() 会自动取消并重置
+      this.startIdleTimer();
     }
   }
 
   cancel(): void {
     this.abortController?.abort();
+    this.clearIdleTimer();
     this.killProcess();
     this.resetServerState();
     this.streaming = false;
@@ -151,8 +204,10 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   sendApproval(): void {}
 
   private async startServer(): Promise<void> {
+    const t0 = performance.now();
     const settings = this.getSettings();
     const cliPath = await this.binaryManager.getBinaryPath(settings);
+    const t1 = performance.now();
     this.serverPassword = this.generatePassword();
     this.providerCache = null;
 
@@ -173,9 +228,19 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     });
 
     const port = await this.waitForServerPort(this.currentProcess);
+    const t2 = performance.now();
     this.serverBaseUrl = `http://127.0.0.1:${port}`;
     await this.waitForHttpReady();
+    const t3 = performance.now();
     this.sessionId = await this.createSession();
+    const t4 = performance.now();
+    console.log('[KiloCodeTiming] Cold start:', {
+      getBinaryPath: `${(t1 - t0).toFixed(0)}ms`,
+      waitForPort: `${(t2 - t1).toFixed(0)}ms`,
+      waitForHttpReady: `${(t3 - t2).toFixed(0)}ms`,
+      createSession: `${(t4 - t3).toFixed(0)}ms`,
+      total: `${(t4 - t0).toFixed(0)}ms`,
+    });
   }
 
   private waitForServerPort(proc: ChildProcess): Promise<number> {
@@ -281,6 +346,8 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   private async waitForHttpReady(): Promise<void> {
     const startedAt = Date.now();
     let lastError: unknown;
+    // 使用指数退避轮询：50ms �?100ms �?200ms，平衡快速检测和总线压力
+    let pollInterval = 50;
 
     while (Date.now() - startedAt < SERVER_READY_TIMEOUT_MS) {
       try {
@@ -289,7 +356,8 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       } catch (error) {
         lastError = error;
       }
-      await this.delay(200);
+      await this.delay(pollInterval);
+      if (pollInterval < 200) pollInterval = Math.min(pollInterval * 2, 200);
     }
 
     throw new Error(`Timed out waiting for kilo HTTP API${lastError instanceof Error ? `: ${lastError.message}` : ''}`);
@@ -321,17 +389,28 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       parts: [{ type: 'text', text: content }],
     };
 
-    // 传递 vault 路径上下文，让 CLI 知道在哪个 vault 中操作
+    // 传�?vault 路径上下文，�?CLI 知道在哪�?vault 中操�?
     if (context?.vaultPath) {
       payload.vaultPath = context.vaultPath;
     }
 
-    // 仅在用户在插件设置中显式配置了模型时才发送 modelID，
-    // 否则让 CLI 使用自身配置文件中的默认模型。
+    // 注入技能上下文（从 .kilo/skills/ 加载�?
+    const skillsContext = await this.buildSkillsContext(context?.vaultPath);
+    if (skillsContext) {
+      // 将技能上下文作为系统前缀注入到用户消息之�?
+      payload.skillsContext = skillsContext;
+      // 同时注入�?parts 开头，�?Agent 在第一条消息就看到上下�?
+      payload.parts = [
+        { type: 'text', text: skillsContext + '\n\n' + content },
+      ];
+    }
+
+    // 仅在用户在插件设置中显式配置了模型时才发�?modelID�?
+    // 否则�?CLI 使用自身配置文件中的默认模型�?
     const model = await this.resolveModel();
     if (model) {
       payload.modelID = model.modelID;
-      // 只在用户显式指定 providerID 时发送（格式如 "anthropic/claude-sonnet-4"）
+      // 只在用户显式指定 providerID 时发送（格式�?"anthropic/claude-sonnet-4"�?
       if (model.providerID) {
         payload.providerID = model.providerID;
         payload.model = model;
@@ -342,8 +421,60 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   }
 
   /**
-   * 解析用户配置的模型。
-   * @returns 用户显式指定了模型时返回 KiloModel，否则返回 null（让 CLI 使用自身默认）。
+   * �?vault 路径加载技能并构建上下文注入字符串�?
+   *
+   * 默认自动加载 kilocode-core 技能的完整正文（作为系统指令前缀）�?
+   * 其他 specialist 技能以目录列表形式注入（Agent 可按需通过 skill 工具加载）�?
+   *
+   * 为什么只自动加载 core skill�?
+   * 避免将所有技能内容塞入上下文导致�?token 膨胀�?
+   */
+  private async buildSkillsContext(vaultPath?: string): Promise<string | null> {
+    if (!vaultPath) return null;
+
+    const skills = await loadSkills(vaultPath);
+
+    // 分出 core skill �?specialist skills
+    const coreSkills: SkillMeta[] = [];
+    const specialistSkills: SkillMeta[] = [];
+
+    for (const skill of skills) {
+      if (skill.name === 'kilocode-core') {
+        coreSkills.push(skill);
+      } else {
+        specialistSkills.push(skill);
+      }
+    }
+
+    const parts: string[] = [];
+
+    // 注入 core skill 完整正文
+    if (coreSkills.length > 0) {
+      parts.push('[SYSTEM CONTEXT — Obsidian KiloCode Core]');
+      for (const core of coreSkills) {
+        parts.push(core.content);
+      }
+    }
+
+    // 注入 specialist skills 目录（只列名称和描述，不列完整正文）
+    if (specialistSkills.length > 0) {
+      parts.push('[AVAILABLE SPECIALIST SKILLS]');
+      for (const skill of specialistSkills) {
+        parts.push(`- ${skill.name}: ${skill.description}`);
+      }
+      parts.push('Use the `skill` tool to load any of these when needed.');
+    }
+
+    // 在技能上下文之后、用户消息之前注入提问协�?
+    // 即使没有技能文件也注入协议，确�?Agent 始终能结构化提问
+    parts.push(QUESTION_PROTOCOL);
+
+    return parts.join('\n\n');
+  }
+
+  /**
+   * 解析用户配置的模型�?
+   * @returns 用户显式指定了模型时返回 KiloModel，否则返�?null（让 CLI 使用自身默认）�?
    */
   private async resolveModel(): Promise<KiloModel | null> {
     const settings = this.getSettings();
@@ -353,7 +484,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     const parsed = this.parseConfiguredModel(configuredModel);
     if (parsed) return parsed;
 
-    // 没有 provider 前缀（如 "claude-sonnet-4"），只返回 modelID，让服务器路由
+    // 没有 provider 前缀（如 "claude-sonnet-4"），只返�?modelID，让服务器路�?
     return {
       providerID: '',
       modelID: configuredModel,
@@ -425,9 +556,9 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   }
 
   /**
-   * 解析 SSE 流，合并同一次 read() 内的相邻同类 chunk。
-   * 单次 read() 可能包含多个 SSE event，将连续的 text/thinking 合并后 yield，
-   * 减少下游 for-await 循环和 DOM 更新次数。
+   * 解析 SSE 流，合并同一�?read() 内的相邻同类 chunk�?
+   * 单次 read() 可能包含多个 SSE event，将连续�?text/thinking 合并�?yield�?
+   * 减少下游 for-await 循环�?DOM 更新次数�?
    */
   private async *parseEventStream(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamChunk> {
     const reader = body.getReader();
@@ -442,7 +573,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       const events = buffer.split(/\r?\n\r?\n/);
       buffer = events.pop() ?? '';
 
-      // 收集本次 read() 的所有 chunk，合并相邻同类
+      // 收集本次 read() 的所�?chunk，合并相邻同�?
       const chunks: StreamChunk[] = [];
 
       for (const event of events) {
@@ -468,7 +599,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         }
       }
 
-      // 合并相邻同类 chunk 后 yield
+      // 合并相邻同类 chunk �?yield
       yield* this.mergeAdjacentChunks(chunks);
     }
 
@@ -495,7 +626,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     }
   }
 
-  /** 合并相邻同类 chunk（连续 text 合并为一个，连续 thinking 合并为一个） */
+  /** 合并相邻同类 chunk（连�?text 合并为一个，连续 thinking 合并为一个） */
   private *mergeAdjacentChunks(chunks: StreamChunk[]): Generator<StreamChunk> {
     if (chunks.length === 0) return;
 
@@ -503,7 +634,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     for (let i = 1; i < chunks.length; i++) {
       const next = chunks[i];
       if (next.type === current.type && (current.type === 'text' || current.type === 'thinking')) {
-        // 同类文本 chunk，合并内容
+        // 同类文本 chunk，合并内�?
         current = {
           type: current.type,
           content: (current.content || '') + (next.content || ''),
@@ -576,26 +707,26 @@ export class KiloCodeChatRuntime implements ChatRuntime {
 
     const record = value as Record<string, unknown>;
 
-    // type === 'thinking' → thinking
+    // type === 'thinking' �?thinking
     if (record.type === 'thinking' && typeof record.text === 'string') {
       result.thinking.push(record.text);
       return;
     }
-    // type === 'reasoning' → thinking（DeepSeek 等模型可能用 reasoning）
+    // type === 'reasoning' �?thinking（DeepSeek 等模型可能用 reasoning�?
     if (record.type === 'reasoning' && typeof record.text === 'string') {
       result.thinking.push(record.text);
       return;
     }
-    // 有 reasoning_content 字段 → thinking 内容单独提取
+    // �?reasoning_content 字段 �?thinking 内容单独提取
     if (typeof record.reasoning_content === 'string' && record.reasoning_content) {
       result.thinking.push(record.reasoning_content);
-      // 如果同时有 text，继续处理 text
+      // 如果同时�?text，继续处�?text
       if (typeof record.text === 'string') {
         result.text.push(record.text);
       }
       return;
     }
-    // type === 'text' → text
+    // type === 'text' �?text
     if (record.type === 'text' && typeof record.text === 'string') {
       result.text.push(record.text);
       return;
@@ -614,21 +745,21 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   }
 
   /**
-   * 使用 Node.js http 模块发送 HTTP 请求。
-   * 浏览器 fetch() 在 Electron renderer 进程中受 CORS 限制，
-   * 而 Node.js http 模块不受此限制。
+   * 使用 Node.js http 模块发�?HTTP 请求�?
+   * 浏览�?fetch() �?Electron renderer 进程中受 CORS 限制�?
+   * �?Node.js http 模块不受此限制�?
    */
   private request(path: string, init: RequestInit = {}): Promise<Response> {
     if (!this.serverBaseUrl) throw new Error('KiloCode server URL is not available');
 
-    // 捕获到局部变量，确保 TypeScript 类型缩窄（string 而非 string | null）
+    // 捕获到局部变量，确保 TypeScript 类型缩窄（string 而非 string | null�?
     const baseUrl = this.serverBaseUrl;
 
     return new Promise((resolve, reject) => {
       const url = new URL(path, baseUrl);
       const method = (init.method || 'GET') as string;
 
-      // 从 init.headers 提取键值对
+      // �?init.headers 提取键值对
       const headers: Record<string, string> = {};
       if (init.headers instanceof Headers) {
         init.headers.forEach((value, key) => { headers[key] = value; });
@@ -645,8 +776,9 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         path: url.pathname + url.search,
         method,
         headers,
+        agent: this.httpAgent,
       }, (res) => {
-        // 将 Node.js headers 转为 plain object（合并多值 header）
+        // �?Node.js headers 转为 plain object（合并多�?header�?
         const resHeaders: Record<string, string> = {};
         for (const [key, value] of Object.entries(res.headers)) {
           if (typeof value === 'string') resHeaders[key] = value;
@@ -656,7 +788,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         const contentType = res.headers['content-type'] ?? '';
 
         if (contentType.includes('text/event-stream')) {
-          // SSE 流式：将 Node.js IncomingMessage 包装为 Web ReadableStream
+          // SSE 流式：将 Node.js IncomingMessage 包装�?Web ReadableStream
           const readable = new ReadableStream({
             start(controller) {
               res.on('data', (chunk: Buffer) => {
@@ -664,6 +796,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
               });
               res.on('end', () => controller.close());
               res.on('error', (err) => controller.error(err));
+              res.on('close', () => controller.close());
             },
           });
           resolve(new Response(readable, { status: res.statusCode ?? 0, headers: resHeaders }));
@@ -681,7 +814,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
 
       req.on('error', reject);
 
-      // AbortController 信号：销毁请求
+      // AbortController 信号：销毁请�?
       if (init.signal) {
         if (init.signal.aborted) {
           req.destroy();
@@ -730,6 +863,32 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.serverPassword = null;
     this.sessionId = null;
     this.providerCache = null;
+  }
+
+  /**
+   * 清除空闲超时定时器�?
+   * 在发消息前或进程停止时调用�?
+   */
+  private clearIdleTimer(): void {
+    if (this.idleTimer !== null) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  /**
+   * 启动空闲超时定时器�?
+   * 消息完成（streaming 结束）后调用。超时后自动 stop() 以释�?token 消耗�?
+   * idleTimeoutSeconds = 0 表示禁用超时�?
+   */
+  private startIdleTimer(): void {
+    this.clearIdleTimer();
+    const timeoutSeconds = this.getSettings().idleTimeoutSeconds ?? 120;
+    if (timeoutSeconds <= 0) return;
+    this.idleTimer = setTimeout(() => {
+      console.log('[KiloCodeChatRuntime] Idle timeout reached, stopping server');
+      this.stop();
+    }, timeoutSeconds * 1000);
   }
 
   private makeId(prefix: string): string {

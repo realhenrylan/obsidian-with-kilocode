@@ -69,26 +69,26 @@ describe('TabManager', () => {
     expect(tab1.id).not.toBe(tab2.id);
   });
 
-  test('closeTab returns true on success', () => {
+  test('closeTab returns true on success', async () => {
     const tab = manager.createTab();
-    expect(manager.closeTab(tab.id)).toBe(true);
+    expect(await manager.closeTab(tab.id)).toBe(true);
     expect(manager.getTabCount()).toBe(0);
   });
 
-  test('closeTab returns false for non-existent id', () => {
-    expect(manager.closeTab('nonexistent')).toBe(false);
+  test('closeTab returns false for non-existent id', async () => {
+    expect(await manager.closeTab('nonexistent')).toBe(false);
   });
 
-  test('closeTab updates activeTabId to last remaining tab', () => {
+  test('closeTab updates activeTabId to last remaining tab', async () => {
     const tab1 = manager.createTab();
     const tab2 = manager.createTab();
-    manager.closeTab(tab2.id);
+    await manager.closeTab(tab2.id);
     expect(manager.getActiveTab()).toBe(tab1);
   });
 
-  test('closeTab sets activeTabId to null when no tabs remain', () => {
+  test('closeTab sets activeTabId to null when no tabs remain', async () => {
     const tab = manager.createTab();
-    manager.closeTab(tab.id);
+    await manager.closeTab(tab.id);
     expect(manager.getActiveTab()).toBeNull();
   });
 

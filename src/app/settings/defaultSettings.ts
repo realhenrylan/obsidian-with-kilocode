@@ -20,4 +20,6 @@ export const DEFAULT_SETTINGS: KiloCodeSettings = {
   compactKeepRecent: 5,
   permissionMode: 'normal',
   mirrorUrl: '',
+  idleTimeoutSeconds: 600,
+  autoReview: false,
 };
