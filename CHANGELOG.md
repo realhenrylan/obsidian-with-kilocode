@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 - **CORS 绕过**: `@kilocode/sdk/client` 使用浏览器 `fetch()`，在 Obsidian Electron renderer 中因 `app://obsidian.md` origin 访问 `http://127.0.0.1` 被 CORS 阻止。新增基于 Node.js `http` 模块的 `nodeFetch` 函数替代全局 `fetch()`，传递给 `createKiloClient` 绕过 CORS。响应头 `Content-Type: text/event-stream` 自动识别为 SSE 流式响应（ReadableStream），其余请求缓冲完整响应。
+- **CI typecheck 失败**: 移除 `createKiloServer` 调用中不存在的 `cors` 属性（`@kilocode/sdk` 的 `ServerOptions` 类型无此字段）；修复 `KiloCodeView.ts` 中 `adapter.getBasePath()` 调用缺少 `FileSystemAdapter` 类型守卫的问题。
 - **SSE 永久挂起**: 移除 `sendMessage()` 中对 `/global/event` SSE 端点的订阅。经 HTTP 测试验证 kilo serve v7.3.1 不通过 SSE 发送事件，所有响应数据通过 `POST /session/{id}/message` 同步返回。改为直接解析 prompt 响应体的 `parts` 数组。
 - **SDK SSE 客户端不传递自定义 fetch**: `serverSentEvents.gen.js` 的 `createSseClient` 使用全局 `fetch` 而非 `options.fetch`。已补丁修复。
 - **vault 路径未传递给 CLI**（三层修复）:
