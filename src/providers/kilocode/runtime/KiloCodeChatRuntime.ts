@@ -5,9 +5,87 @@ import type { KiloCodeSettings } from '../../../core/types';
 import { createKiloServer, type ServerOptions } from '@kilocode/sdk/server';
 import { createKiloClient } from '@kilocode/sdk/client';
 import type { KiloClient } from '@kilocode/sdk/client';
+import * as http from 'http';
 
 const DEFAULT_AGENT = 'code';
 const SERVE_TIMEOUT = 15000;
+
+/** Node.js http-based fetch that bypasses CORS in Obsidian's Electron renderer.
+ *  The standard fetch() in Electron renderer is subject to CORS (origin = app://obsidian.md
+ *  cannot access http://127.0.0.1). This wrapper uses the Node.js http module directly,
+ *  which has no CORS restrictions.
+ *
+ *  - SSE responses (Content-Type: text/event-stream): returns a Response with a streaming
+ *    ReadableStream body so the SSE client can consume events in real time
+ *  - All other responses: buffers the full body and returns a standard Response */
+function nodeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const request = new Request(input, init);
+  const url = new URL(request.url);
+
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname + url.search,
+        method: request.method,
+        headers: Object.fromEntries(request.headers.entries()),
+      },
+      (res) => {
+        const status = res.statusCode ?? 500;
+        const statusText = res.statusMessage ?? '';
+        const headers = new Headers();
+        for (let i = 0; i < res.rawHeaders.length; i += 2) {
+          headers.append(res.rawHeaders[i], res.rawHeaders[i + 1]);
+        }
+
+        // Check Content-Type to decide streaming vs buffering
+        const ct = (res.headers['content-type'] || '').toLowerCase();
+        const isSSE = ct.includes('text/event-stream');
+
+        if (isSSE) {
+          // SSE: bridge Node.js Readable → Web ReadableStream
+          const stream = new ReadableStream({
+            start(controller) {
+              res.on('data', (chunk: Buffer) => controller.enqueue(chunk));
+              res.on('end', () => controller.close());
+              res.on('error', (err) => controller.error(err));
+            },
+          });
+          resolve(new Response(stream, { status, statusText, headers }));
+        } else {
+          // Regular requests: buffer the full response
+          const bodyBuffer: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => bodyBuffer.push(chunk));
+          res.on('end', () => {
+            const body = Buffer.concat(bodyBuffer);
+            resolve(new Response(body, { status, statusText, headers }));
+          });
+          res.on('error', reject);
+        }
+      },
+    );
+
+    if (init?.signal) {
+      init.signal.addEventListener('abort', () => { req.destroy(); }, { once: true });
+    }
+
+    req.on('error', (err) => {
+      // Ignore abort errors
+      if ((err as any)?.code === 'ABORT_ERR') return;
+      reject(err);
+    });
+
+    if (request.body) {
+      request.arrayBuffer().then((buf) => {
+        if (buf.byteLength > 0) req.write(Buffer.from(buf));
+        req.end();
+      }).catch(reject);
+    } else {
+      req.end();
+    }
+  });
+}
 
 export class KiloCodeChatRuntime implements ChatRuntime {
   private binaryManager: BinaryManager;
@@ -101,7 +179,11 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         }
         this.sessionId = sessionResult.data.id as string;
       }
-      const eventPromise = (this.client.event as any).subscribe({ query: { directory: '.' }, signal });
+
+      // Note: kilo serve v7.3.1 returns the complete response in POST /session/{id}/message
+      // directly. The /global/event SSE endpoint exists but does not emit any events during
+      // normal prompt processing (verified by direct HTTP testing). We skip the SDK's SSE
+      // event subscription and parse the prompt response parts directly instead.
       const promptResult = await (this.client.session as any).prompt({
         path: { id: this.sessionId },
         body: { agent: DEFAULT_AGENT, parts: [{ type: 'text', text: content }] },
@@ -112,33 +194,13 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         yield { type: 'done' };
         return;
       }
-      const eventResult = await eventPromise;
-      if (eventResult?.stream) {
-        let gotContent = false;
-        // The SDK SSE client yields already-parsed JSON objects from the SSE data: field.
-        // Format: { type: "event.name", properties: { ... } }
-        for await (const rawData of eventResult.stream) {
-          if (signal.aborted) break;
-          if (!rawData) continue;
-
-          // Break out when message is complete (message.updated) or session is idle
-          if (rawData.type === 'message.updated' || (rawData.type === 'session.status' && rawData.properties?.status === 'idle')) {
-            gotContent = true;
-            break;
-          }
-
-          // Wrap in the format expected by parseEvent
-          const event = { type: rawData.type, data: rawData.properties || rawData };
-          const parsed = this.parseEvent(event);
-          if (parsed) { gotContent = true; yield parsed; }
-        }
-        if (!gotContent && promptResult.data?.parts) {
-          const parts = promptResult.data.parts;
-          if (Array.isArray(parts)) {
-            for (const part of parts) {
-              const chunk = this.parsePart(part);
-              if (chunk) yield chunk;
-            }
+      if (promptResult.data?.parts) {
+        const parts = promptResult.data.parts;
+        if (Array.isArray(parts)) {
+          for (const part of parts) {
+            if (signal.aborted) break;
+            const chunk = this.parsePart(part);
+            if (chunk) yield chunk;
           }
         }
       }
@@ -200,7 +262,10 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       timeout: SERVE_TIMEOUT,
       cors: ['app://obsidian.md'],
     });
-    this.client = createKiloClient({ baseUrl: this.serverHandle.url });
+    this.client = createKiloClient({
+      baseUrl: this.serverHandle.url,
+      fetch: nodeFetch,
+    });
   }
 
   private buildModelConfig(): Record<string, unknown> {

@@ -12,6 +12,22 @@ if you want to view the source, please visit the github repository of this plugi
 const prod = process.argv[2] === "production";
 const cwd = process.cwd();
 
+/** Resolve @kilocode/sdk subpath exports to actual ESM files for CJS bundling.
+ *  The SDK uses `"import"`-only export conditions in package.json, which
+ *  esbuild cannot resolve when target format is CJS. This plugin maps the
+ *  subpath directly to dist/*.js so esbuild can read and convert ESM→CJS. */
+const sdkResolvePlugin = {
+  name: 'kilocode-sdk-resolve',
+  setup(build) {
+    build.onResolve({ filter: /^@kilocode\/sdk(\/.*)?$/ }, (args) => {
+      if (args.kind === 'entry-point') return;
+      const sub = args.path.slice('@kilocode/sdk'.length); // '' or '/server', '/client'
+      const file = sub ? `${sub.slice(1)}.js` : 'index.js';
+      return { path: path.join(cwd, 'node_modules', '@kilocode', 'sdk', 'dist', file) };
+    });
+  },
+};
+
 const context = await esbuild.context({
   absWorkingDir: cwd,
   banner: {
@@ -43,6 +59,7 @@ const context = await esbuild.context({
   treeShaking: true,
   outfile: path.join(cwd, "main.js"),
   minify: prod,
+  plugins: [sdkResolvePlugin],
 });
 
 if (prod) {
