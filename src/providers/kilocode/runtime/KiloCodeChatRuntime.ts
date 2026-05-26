@@ -6,6 +6,9 @@ import { createKiloServer, type ServerOptions } from '@kilocode/sdk/server';
 import { createKiloClient } from '@kilocode/sdk/client';
 import type { KiloClient } from '@kilocode/sdk/client';
 import * as http from 'http';
+import { EventBuffer } from './EventBuffer';
+import { loadSkills } from './SkillLoader';
+import { QUESTION_PROTOCOL } from './prompts';
 
 const DEFAULT_AGENT = 'code';
 const SERVE_TIMEOUT = 15000;
@@ -18,7 +21,7 @@ const SERVE_TIMEOUT = 15000;
  *  - SSE responses (Content-Type: text/event-stream): returns a Response with a streaming
  *    ReadableStream body so the SSE client can consume events in real time
  *  - All other responses: buffers the full body and returns a standard Response */
-function nodeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+function nodeFetch(input: RequestInfo | URL, init?: RequestInit, agent?: http.Agent): Promise<Response> {
   const request = new Request(input, init);
   const url = new URL(request.url);
 
@@ -30,6 +33,7 @@ function nodeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
         path: url.pathname + url.search,
         method: request.method,
         headers: Object.fromEntries(request.headers.entries()),
+        agent,
       },
       (res) => {
         const status = res.statusCode ?? 500;
@@ -98,10 +102,21 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   private streaming = false;
   private pendingModel: string | null = null;
   private vaultPath: string | null = null;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private httpAgent: http.Agent;
+  private boundFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+  readonly eventBuffer = new EventBuffer();
 
   constructor(binaryManager: BinaryManager, getSettings: () => KiloCodeSettings) {
     this.binaryManager = binaryManager;
     this.getSettings = getSettings;
+    this.httpAgent = new http.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 30000,
+      maxSockets: 1,
+    });
+    this.boundFetch = (input, init) => nodeFetch(input, init, this.httpAgent);
   }
 
   async start(vaultPath?: string): Promise<void> {
@@ -125,6 +140,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   }
 
   async stop(): Promise<void> {
+    this.clearIdleTimer();
     this.abortController?.abort();
     if (this.client && this.sessionId) {
       try {
@@ -137,6 +153,8 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.client = null;
     this.serverHandle = null;
     this.sessionId = null;
+    this.eventBuffer.clear();
+    this.httpAgent.destroy();
   }
 
   setModel(modelId: string): void {
@@ -156,6 +174,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   }
 
   cancel(): void {
+    this.clearIdleTimer();
     this.abortController?.abort();
     if (this.client && this.sessionId) {
       (this.client.session as any).abort({ path: { id: this.sessionId } }).catch(() => {});
@@ -164,12 +183,11 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   }
 
   async *sendMessage(content: string, context?: MessageContext): AsyncGenerator<StreamChunk> {
-    // Pass vault path through start() so it's available even when the client
-    // was already created without directory config (e.g. during warmup).
+    this.clearIdleTimer();
     await this.start(context?.vaultPath);
     if (!this.client || !this.serverHandle) {
-      yield { type: 'error', error: 'KiloCode server is not ready' };
-      yield { type: 'done' };
+      yield this.emit({ type: 'error', error: 'KiloCode server is not ready' });
+      yield this.emit({ type: 'done' });
       return;
     }
     this.streaming = true;
@@ -182,48 +200,52 @@ export class KiloCodeChatRuntime implements ChatRuntime {
           signal,
         });
         if (sessionResult.error) {
-          yield { type: 'error', error: String(sessionResult.error) };
-          yield { type: 'done' };
+          yield this.emit({ type: 'error', error: String(sessionResult.error) });
+          yield this.emit({ type: 'done' });
           return;
         }
         this.sessionId = sessionResult.data.id as string;
       }
 
-      // Note: kilo serve v7.3.1 returns the complete response in POST /session/{id}/message
-      // directly. The /global/event SSE endpoint exists but does not emit any events during
-      // normal prompt processing (verified by direct HTTP testing). We skip the SDK's SSE
-      // event subscription and parse the prompt response parts directly instead.
+      const t0 = performance.now();
+      const skillsContext = await this.buildSkillsContent(context?.vaultPath);
+      const enhancedContent = skillsContext ? skillsContext + '\n\n' + content : content;
+
       const promptResult = await (this.client.session as any).prompt({
         path: { id: this.sessionId },
-        body: { agent: DEFAULT_AGENT, parts: [{ type: 'text', text: content }] },
+        body: { agent: DEFAULT_AGENT, parts: [{ type: 'text', text: enhancedContent }] },
         signal,
       });
       if (promptResult.error) {
-        yield { type: 'error', error: String(promptResult.error) };
-        yield { type: 'done' };
+        yield this.emit({ type: 'error', error: String(promptResult.error) });
+        yield this.emit({ type: 'done' });
         return;
       }
+      const t1 = performance.now();
+      console.log('[KiloCodeTiming] prompt latency:', `${(t1 - t0).toFixed(0)}ms`);
+
       if (promptResult.data?.parts) {
         const parts = promptResult.data.parts;
         if (Array.isArray(parts)) {
           for (const part of parts) {
             if (signal.aborted) break;
             const chunk = this.parsePart(part);
-            if (chunk) yield chunk;
+            if (chunk) yield this.emit(chunk);
           }
         }
       }
-      yield { type: 'done' };
+      yield this.emit({ type: 'done' });
     } catch (err: any) {
       if (err?.name === 'AbortError') {
-        yield { type: 'done' };
+        yield this.emit({ type: 'done' });
       } else {
         console.error('[KiloCodeChatRuntime] sendMessage error:', err);
-        yield { type: 'error', error: err?.message || String(err) };
-        yield { type: 'done' };
+        yield this.emit({ type: 'error', error: err?.message || String(err) });
+        yield this.emit({ type: 'done' });
       }
     } finally {
       this.streaming = false;
+      this.startIdleTimer();
     }
   }
 
@@ -285,7 +307,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     });
     this.client = createKiloClient({
       baseUrl: this.serverHandle.url,
-      fetch: nodeFetch,
+      fetch: this.boundFetch,
       ...(vaultPath ? { directory: vaultPath } : {}),
     });
   }
@@ -317,6 +339,59 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     if (parts.length >= 3) return { providerID: parts[parts.length - 2], modelID: parts[parts.length - 1] };
     if (parts.length === 1) return { providerID: '', modelID: parts[0] };
     return null;
+  }
+
+  private emit(chunk: StreamChunk): StreamChunk {
+    this.eventBuffer.append(chunk);
+    return chunk;
+  }
+
+  private async buildSkillsContent(vaultPath?: string): Promise<string | null> {
+    if (!vaultPath) return null;
+
+    const skills = await loadSkills(vaultPath);
+    if (skills.length === 0) return null;
+
+    const parts: string[] = [];
+
+    const coreSkills = skills.filter(s => s.name === 'kilocode-core');
+    const specialistSkills = skills.filter(s => s.name !== 'kilocode-core');
+
+    if (coreSkills.length > 0) {
+      parts.push('[SYSTEM CONTEXT — Obsidian KiloCode Core]');
+      for (const core of coreSkills) {
+        parts.push(core.content);
+      }
+    }
+
+    if (specialistSkills.length > 0) {
+      parts.push('[AVAILABLE SPECIALIST SKILLS]');
+      for (const skill of specialistSkills) {
+        parts.push(`- ${skill.name}: ${skill.description}`);
+      }
+      parts.push('Use the `skill` tool to load any of these when needed.');
+    }
+
+    parts.push(QUESTION_PROTOCOL);
+
+    return parts.join('\n\n');
+  }
+
+  private clearIdleTimer(): void {
+    if (this.idleTimer !== null) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  private startIdleTimer(): void {
+    this.clearIdleTimer();
+    const timeoutSeconds = this.getSettings().idleTimeoutSeconds ?? 120;
+    if (timeoutSeconds <= 0) return;
+    this.idleTimer = setTimeout(() => {
+      console.log('[KiloCodeChatRuntime] Idle timeout reached, stopping server');
+      this.stop();
+    }, timeoutSeconds * 1000);
   }
 
   private parseSSEBlock(block: string): { type: string; data: any } | null {
