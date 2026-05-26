@@ -30,7 +30,7 @@ jest.mock('@kilocode/sdk/client', () => {
   });
   const mockSessionPrompt = jest.fn().mockResolvedValue({
     error: null,
-    data: { info: { id: 'msg-1' }, parts: [] },
+    data: { info: { id: 'msg-1' }, parts: [{ type: 'text', text: 'Hello!' }] },
   });
   const mockSessionAbort = jest.fn().mockResolvedValue({ data: true });
   const mockSessionStatus = jest.fn().mockResolvedValue({ data: { status: 'idle' }, error: null });

@@ -19,8 +19,10 @@ describe('BinaryManager', () => {
   describe('getBinaryPath priority chain', () => {
     it('should return user-configured cliPath when set', async () => {
       const manager = new BinaryManager(tmpDir);
-      const result = await manager.getBinaryPath({ cliPath: '/custom/kilo', mirrorUrl: '' } as any);
-      expect(result).toBe('/custom/kilo');
+      const customPath = path.join(tmpDir, 'custom-kilo');
+      fs.writeFileSync(customPath, 'fake-binary');
+      const result = await manager.getBinaryPath({ cliPath: customPath, mirrorUrl: '' } as any);
+      expect(result).toBe(customPath);
     });
 
     it('should return local binary when exists and version matches', async () => {
