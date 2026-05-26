@@ -8,7 +8,6 @@ import type { ToolCallInfo, Message } from '../../core/types';
 import type KiloCodePlugin from '../../main';
 import { TabManager } from './tabs/TabManager';
 import { StreamController } from './controllers/StreamController';
-import { InputController } from './controllers/InputController';
 import { ConversationController } from './controllers/ConversationController';
 import { ConversationService } from './services/ConversationService';
 import { ChatState } from './state/ChatState';
@@ -19,6 +18,7 @@ import { CLIErrorHandler } from '../../shared/ErrorNotice';
 import { PlanModeController } from './PlanModeController';
 import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import type { ChatRuntime } from '../../core/providers/types';
+import { extractEditedFiles, runReview } from '../../providers/kilocode/runtime/ReviewLoop';
 
 /** 鎸?Tab 缂撳啿鐨勬祦寮忕姸鎬侊紙鐢ㄤ簬璺ㄦ爣绛炬祦寮忔仮澶嶏級 */
 interface TabStreamingState {
@@ -36,7 +36,6 @@ export class KiloCodeView extends ItemView {
   private plugin: KiloCodePlugin;
   private tabManager: TabManager;
   private streamController: StreamController;
-  private inputController: InputController;
   private conversationService: ConversationService;
   private conversationController: ConversationController;
   private chatState: ChatState;
@@ -74,7 +73,6 @@ export class KiloCodeView extends ItemView {
 
     this.tabManager = new TabManager(plugin.settings.maxTabs);
     this.streamController = new StreamController();
-    this.inputController = new InputController();
     this.conversationService = new ConversationService(
       plugin.app,
       plugin.app.vault.getRoot().path
@@ -152,14 +150,32 @@ export class KiloCodeView extends ItemView {
       this.chatState.setConversationId(activeTab.state.conversationId);
       void this.conversationController.restoreConversation(activeTab.state.conversationId);
     }
+
+    // Background warmup: pre-start CLI so first send is fast
+    void this.warmupRuntime();
+  }
+
+  /**
+   * Background warmup of the CLI process (fire-and-forget).
+   * Only warms up if binary is already cached (previously downloaded).
+   */
+  private async warmupRuntime(): Promise<void> {
+    if (!this.plugin.binaryManager.isReady()) return;
+    try {
+      const runtime = await this.getOrCreateRuntime();
+      if (runtime) {
+        console.log('[KiloCodeView] Runtime warmed up in background');
+      }
+    } catch (err) {
+      console.warn('[KiloCodeView] Background runtime warmup failed:', err);
+    }
   }
 
   async onClose(): Promise<void> {
     this.streamController.cancel();
     this.approvalManager.cancelAll();
-    this.inputController.cancel();
     this.streamingStates.clear();
-    // 閫氳繃 ConversationController 鍒锋柊寰呭啓鍏ョ殑浼氳瘽鏁版嵁
+    await this.tabManager.disposeAllRuntimes();
     await this.conversationController.save();
     this.messageRenderer = null;
     this.isLayoutBuilt = false;
@@ -492,8 +508,10 @@ export class KiloCodeView extends ItemView {
       }
 
       // 鍚屾 ChatState
-        
+      this.chatState.setConversationId(tab.state.conversationId ?? null);
+
       // 濡傛灉鐩爣鏍囩鏈夋鍦ㄨ繘琛岀殑娴侊紝閲嶅缓娴佸紡娓叉煋鐘舵€?
+      let recoveredFromState = false;
       if (tab.state.isStreaming) {
         const state = this.streamingStates.get(tabId);
         if (state) {
@@ -506,6 +524,36 @@ export class KiloCodeView extends ItemView {
           }
           for (const toolCall of state.toolCalls.values()) {
             this.renderToolCall(toolCall);
+          }
+          recoveredFromState = true;
+        }
+      }
+
+      // EventBuffer recovery: when streaming state was already cleaned up
+      // (stream completed in background), restore from runtime event buffer.
+      if (!recoveredFromState) {
+        const runtime = tab.runtime;
+        if (runtime && 'eventBuffer' in runtime) {
+          const eb = (runtime as any).eventBuffer;
+          if (eb && eb.length > 0) {
+            const chunks = eb.replay(-1);
+            const hasSavedMessages = (this.messagesEl?.children.length ?? 0) > 0;
+            if (chunks.filter((c: any) => c.type !== 'done').length > 0 && !hasSavedMessages) {
+              this.messageRenderer?.addAssistantMessage();
+              for (const chunk of chunks) {
+                switch (chunk.type) {
+                  case 'text':
+                    this.messageRenderer?.appendText(chunk.content || '');
+                    break;
+                  case 'thinking':
+                    this.messageRenderer?.appendThinking(chunk.content || '');
+                    break;
+                  case 'tool_use':
+                    if (chunk.toolCall) this.renderToolCall(chunk.toolCall);
+                    break;
+                }
+              }
+            }
           }
         }
       }
@@ -558,18 +606,30 @@ export class KiloCodeView extends ItemView {
 
   /** 鑾峰彇鎴栧惎鍔?ChatRuntime */
   private async getOrCreateRuntime(): Promise<ChatRuntime | null> {
-    const runtime = this.inputController.getRuntime();
-    if (runtime) return runtime;
+    const activeTab = this.tabManager.getActiveTab();
+    if (!activeTab) return null;
+
+    if (activeTab.runtime) return activeTab.runtime;
+
+    if (this.plugin.warmupRuntimeRef) {
+      const warmedUp = this.plugin.warmupRuntimeRef;
+      this.plugin.warmupRuntimeRef = null;
+      activeTab.runtime = warmedUp;
+      this.plugin.addKilocodeRuntime(warmedUp);
+      return warmedUp;
+    }
 
     const registration = ProviderRegistry.get('kilocode');
     if (!registration) return null;
 
     const newRuntime = registration.createRuntime();
-    this.inputController.setRuntime(newRuntime);
+    activeTab.runtime = newRuntime;
+    this.plugin.addKilocodeRuntime(newRuntime);
 
     try {
       await newRuntime.start();
     } catch (err) {
+      activeTab.runtime = null;
       console.error('[KiloCodeView] Failed to start runtime:', err);
       return null;
     }
@@ -583,13 +643,14 @@ export class KiloCodeView extends ItemView {
    * 涓嶄細鑷姩鐢熸晥銆傝皟鐢ㄦ鏂规硶鍙互鍋滄褰撳墠杩涚▼骞惰涓嬩竴娆?getOrCreateRuntime() 鍒涘缓鏂拌繘绋嬨€?
    */
   async restartRuntime(): Promise<void> {
-      const runtime = this.inputController.getRuntime();
-      if (runtime) {
-        runtime.resetSession();
-        this.inputController.setRuntime(null);
-      }
-      new Notice('KiloCode session reset. Next message will use new configuration.');
+    const activeTab = this.tabManager.getActiveTab();
+    const runtime = activeTab?.runtime;
+    if (runtime) {
+      await runtime.stop();
+      if (activeTab) activeTab.runtime = null;
     }
+    new Notice('KiloCode session reset. Next message will use new configuration.');
+  }
   private getCurrentNotePath(): string | undefined {
     const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
     return activeView?.file?.path;
@@ -608,7 +669,7 @@ export class KiloCodeView extends ItemView {
     const tabId = activeTab.id;
 
     try {
-      // 0. 閫掑娴佸紡浠ｆ暟锛堝啿绐佷繚鎶わ級+ 璁板綍鍙戦€佽€呮爣绛?ID
+      const tUserSend = performance.now();
       const generation = activeTab.bumpStreamGeneration();
       this.senderTabId = activeTab.id;
 
@@ -676,8 +737,7 @@ export class KiloCodeView extends ItemView {
 
       // 璁剧疆瀹℃壒鍐冲畾鍥炶皟
       this.streamController.setApprovalDecisionCallback((toolName, decision) => {
-        const rt = this.inputController.getRuntime();
-        rt?.sendApproval?.(toolName, decision as 'allow' | 'deny');
+        activeTab.runtime?.sendApproval?.(toolName, decision as 'allow' | 'deny');
       });
 
       const assistantMessage = await this.streamController.consumeStream(generator, {
@@ -741,6 +801,30 @@ export class KiloCodeView extends ItemView {
       // 6. 淇濆瓨鍔╂墜娑堟伅鍒颁細璇?
       await this.conversationController.addMessage(assistantMessage);
 
+      // 7. Auto-review: optionally review modified files using a separate runtime
+      if (this.plugin.settings.autoReview && runtime) {
+        const editedFiles = extractEditedFiles(assistantMessage);
+        if (editedFiles.length > 0) {
+          const adapter = this.plugin.app.vault.adapter;
+          const vaultPath = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : '';
+          runReview({
+            userRequest: content,
+            editedFiles,
+            vaultPath,
+            createRuntime: () => {
+              const registration = ProviderRegistry.get('kilocode');
+              return registration!.createRuntime();
+            },
+          }).then((verdict) => {
+            if (verdict !== 'LGTM') {
+              new Notice('\uD83D\uDD0D Review found issues:\n' + verdict, 8000);
+            }
+          }).catch((err) => {
+            console.warn('[KiloCodeView] Auto-review failed:', err);
+          });
+        }
+      }
+
       // 娓呴櫎鍥剧墖
       this.imageContext.clearImages();
     } catch (error) {
@@ -769,9 +853,8 @@ export class KiloCodeView extends ItemView {
   /** 娓叉煋宸ュ叿璋冪敤鍗＄墖 */
   
   private async handleModelSwitch(): Promise<void> {
-    // Dynamically import to avoid issues with require() type
-    const Modal = (this.app as any).plugins?.plugins?.["obsidian"]?.Modal || (globalThis as any).Modal;
-    const runtime = this.inputController.getRuntime();
+    const activeTab = this.tabManager.getActiveTab();
+    const runtime = activeTab?.runtime;
     const currentModel = this.plugin.settings.defaultModel || "";
 
     class ModelSelectModal extends (this.app as any).Modal {
@@ -862,7 +945,8 @@ export class KiloCodeView extends ItemView {
 
   /** 澶勭悊鍙栨秷 */
   private handleCancel(): void {
-    this.inputController.cancel();
+    const activeTab = this.tabManager.getActiveTab();
+    activeTab?.runtime?.cancel();
     this.streamController.cancel();
   }
 
