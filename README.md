@@ -39,17 +39,17 @@
 | Feature | Description |
 |---------|-------------|
 | 🤖 **AI Chat Sidebar** | Chat with KiloCode AI directly in Obsidian's sidebar |
-| 📝 **Inline Edit** | Select text + hotkey to edit notes with AI assistance |
-| 🔧 **Slash Commands** | Type `/` for reusable prompt templates |
-| 📎 **@mention** | Type `@` to mention vault files, MCP servers, or subagents |
+| 📝 **Inline Edit** | Select text + hotkey to edit notes with AI assistance (modal and diff viewer ready, AI call pending) |
+| 🔧 **Slash Commands** | Framework in place; built-in command handlers (/compact, /clear, /model, /mode) pending |
+| 📎 **@mention** | Search service and dropdown UI ready, not yet wired into chat input |
 | 📋 **Plan Mode** | Three modes: code, plan (read-only), ask (Q&A only) |
 | 💬 **Multi-Tab Chat** | Multiple chat tabs with conversation history |
 | 🔄 **Streaming Responses** | Real-time AI responses with interruption support |
 | 🧵 **Conversation Fork/Rewind** | Fork conversations at any message, rewind to previous states |
-| 🔌 **MCP Support** | Connect external tools via Model Context Protocol |
-| 🖼️ **Image Attachments** | Paste, drag-drop, or pick images as chat context (5MB limit) |
+| 🔌 **MCP Support** | Manager and tool adapter framework ready, protocol connection and tool calls pending |
+| 🖼️ **Image Attachments** | UI supports paste/drag-drop/file pick with preview; image delivery to CLI backend pending |
 | 🛡️ **Permission System** | Yolo/Normal/Plan security modes with per-tool approval dialogs |
-| 🌍 **i18n** | Multi-language support (English, Chinese, Japanese, Korean, and more) |
+| 🌍 **i18n** | English and Chinese UI, auto-switches by browser language |
 | 📦 **CLI Auto-Download** | Zero-config setup — CLI binary auto-downloads from npm on first use |
 
 ---
@@ -94,12 +94,12 @@ Click the KiloCode icon in the ribbon (or `Command Palette → KiloCode: Open ch
 
 | Action | How |
 |--------|-----|
-| **Inline Edit** | Select text → `Ctrl/Cmd+Shift+E` → enter instruction → review diff → Accept/Reject |
-| **Slash Commands** | Type `/` in chat input (`/compact`, `/clear`, `/model`, `/mode`) |
-| **@mention** | Type `@` to reference vault files, folders, MCP servers, or subagents |
+| **Inline Edit** | Select text → `Ctrl/Cmd+Shift+E` → enter instruction → review diff → Accept/Reject (AI call pending) |
+| **Slash Commands** | Type `/` in chat input (`/compact`, `/clear`, `/model`, `/mode`) (pending) |
+| **@mention** | Type `@` to reference vault files, folders, MCP servers, or subagents (not wired yet) |
 | **Switch Mode** | Click mode toggle or `Shift+Tab` to cycle Code/Plan/Ask |
 | **Fork/Rewind** | Hover a message for ⏪ Rewind, 🍴 Fork, or 📋 Copy |
-| **Image Attach** | Paste (`Ctrl/Cmd+V`), drag-drop, or click the image button |
+| **Image Attach** | Paste (`Ctrl/Cmd+V`), drag-drop, or click the image button (UI ready, delivery pending) |
 | **Note Context** | Toggle the 📄 button to include the active note as AI context |
 
 ### Permission Modes
