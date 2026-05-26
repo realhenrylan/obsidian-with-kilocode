@@ -30,6 +30,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **依赖**: 新增 `@kilocode/sdk: ^7.3.1`
 - **ARCHITECTURE.md / DEVELOPMENT.md / ROADMAP.md**: 新增架构、开发指南和路线图文档
 
+### Docs
+
+- **README 修正**: 根据实际代码实现状态更新功能列表和快速参考表。标注斜杠命令、@提及、内联编辑 AI 调用、MCP 连接、图片传输为"待实现/待完成"状态；修正 i18n 宣称从"日文/韩文等"改为"中英文"。同步更新英文和中文 README。
+
 ### Removed
 
 - **SSE 事件订阅**: 移除了 `sendMessage()` 中对 `/global/event` 的 SSE 流式订阅逻辑。kilo serve v7.3.1 的所有响应数据通过 `POST /session/{id}/message` 同步返回，SSE 端点不产生实际事件。
