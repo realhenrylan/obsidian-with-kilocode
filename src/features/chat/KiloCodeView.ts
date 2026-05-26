@@ -659,7 +659,7 @@ export class KiloCodeView extends ItemView {
       this.approvalManager.setPermissionMode(this.plugin.settings.permissionMode);
 
       const generator = runtime.sendMessage(content, {
-        vaultPath: this.plugin.app.vault.getRoot().path,
+        vaultPath: this.plugin.app.vault.adapter.getBasePath(),
         currentNote: currentNote || this.getCurrentNotePath(),
       });
 

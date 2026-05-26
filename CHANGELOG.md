@@ -4,49 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
-
-### Changed
-
-- **重构通信层**: `KiloCodeChatRuntime` 废弃 `kilo run <message>` 子进程模式，改用 `@kilocode/sdk` 的 `createKiloServer` / `createKiloClient` API，大幅精简代码（885 行 → ~400 行）
-- **二进制检测多阶段策略**: `BinaryManager.getBinaryPath()` 按优先级执行 5 阶段检测：手动路径 → 插件目录 → 系统 PATH → 全局 npm → npm 下载。新增 `DetectionResult` 接口和 `autoDetect()` 方法
-- **CLI 配置读取器增强**: `cliConfigReader.ts` 支持多文件名（kilo.jsonc / kilo.json / config.json），新增 JSONC 解析器（注释、尾逗号），移除 apiKey 相关逻辑
-- **构建配置**: esbuild 新增 `platform: "node"`；tsconfig 的 `moduleResolution` 改为 `bundler`；jest 添加 `@kilocode/sdk` 模块映射
-
-### Added
-
-- **模型选择支持**: `ChatRuntime` 接口新增 `setModel(modelId)` / `getModel()` 方法；`KiloCodeView` 新增模型按钮 DOM 引用，支持运行时切换模型
-- **依赖**: 新增 `@kilocode/sdk: ^7.3.1`
-- **ROADMAP.md**: 新增项目规划文件，跟踪里程碑与待办事项
-
-### Fixed
-
-- **`.write_runtime.js` 残留**: 根目录新增测试辅助文件 `.write_runtime.js`（待移入 tests 目录）
-
-### Changed
-
-- **模型覆盖修复**: 插件不再硬编码 `modelID` 覆盖 `kilo serve` CLI 自身配置。`defaultModel` 默认值从 `'claude-sonnet-4-20250514'` 改为空字符串。当用户在插件设置中未显式配置模型时，API 请求不发送 `modelID` 字段，让 CLI 使用其配置文件中的默认模型。设置面板模型下拉框新增 "Use CLI default" 选项。`KiloCodeChatRuntime` 构造函数改为接受设置 getter 函数 `() => KiloCodeSettings` 而非快照对象，确保运行时始终使用最新设置。
-
-### Added
-
-- **CLI 配置自动读取**: 新增 `src/core/cliConfigReader.ts`，插件启动时自动读取 `~/.config/kilo/config.json`，将 `defaultModel` 和 `baseUrl` 合并到插件设置（插件已有值优先，CLI 配置作为 fallback）。设置面板新增 "CLI Configuration" 区域，显示当前检测到的 CLI 模型和 API key 状态。
-- **CLI 重载命令**: 添加 "KiloCode: Reload CLI Configuration" 命令，用于在修改 `kilo` CLI 配置文件后手动重启子进程。`kilo serve` 只在启动时读取一次配置，修改 `~/.config/kilo/config.json` 后需要触发此命令使 new API key 等变更生效。
-
-### Fixed
-
-- **context 参数丢失**: `KiloCodeChatRuntime.sendMessage()` 的 `context` 参数（包含 `vaultPath` 和 `currentNote`）之前未传递给 `buildMessagePayload()`，导致 vault 路径上下文从未发送到 CLI。现已修复并将 `vaultPath` 写入请求 payload。
-- **首次打开无响应**: `KiloCodeView.onOpen()` 未自动创建默认标签页，`TabManager` 始终为空。用户输入消息后 `handleSend()` 因 `getActiveTab()` 返回 null 而静默退出，不提供任何反馈。修复：在 `onOpen()` 中检测无标签页时自动调用 `tabManager.createTab()` 创建首个标签页。
-- **`.playwright-mcp` 调试日志泄漏**: 工作区残留 37 个 Playwright 浏览器调试文件（console log + 页面快照）。删除目录并加入 `.gitignore`。
+## [0.8.0] - 2026-05-26
 
 ### Fixed
 
 - **CORS 绕过**: `@kilocode/sdk/client` 使用浏览器 `fetch()`，在 Obsidian Electron renderer 中因 `app://obsidian.md` origin 访问 `http://127.0.0.1` 被 CORS 阻止。新增基于 Node.js `http` 模块的 `nodeFetch` 函数替代全局 `fetch()`，传递给 `createKiloClient` 绕过 CORS。响应头 `Content-Type: text/event-stream` 自动识别为 SSE 流式响应（ReadableStream），其余请求缓冲完整响应。
-- **SSE 永久挂起**: 移除 `sendMessage()` 中对 `/global/event` SSE 端点的订阅。经 HTTP 测试验证 kilo serve v7.3.1 不通过 SSE 发送事件（不论 prompt 长短，0 事件），所有响应数据通过 `POST /session/{id}/message` 同步返回。改为直接解析 prompt 响应体的 `parts` 数组。
-- **SDK SSE 客户端不传递自定义 fetch**: `serverSentEvents.gen.js` 中 `createSseClient` 使用全局 `fetch` 而非传入的 `options.fetch`。已补丁修复。
+- **SSE 永久挂起**: 移除 `sendMessage()` 中对 `/global/event` SSE 端点的订阅。经 HTTP 测试验证 kilo serve v7.3.1 不通过 SSE 发送事件，所有响应数据通过 `POST /session/{id}/message` 同步返回。改为直接解析 prompt 响应体的 `parts` 数组。
+- **SDK SSE 客户端不传递自定义 fetch**: `serverSentEvents.gen.js` 的 `createSseClient` 使用全局 `fetch` 而非 `options.fetch`。已补丁修复。
+- **vault 路径未传递给 CLI**（三层修复）:
+  - `KiloCodeView.ts`: 使用了 `app.vault.getRoot().path`（返回虚拟路径 `/`），改为 `app.vault.adapter.getBasePath()`（返回磁盘绝对路径）。
+  - `KiloCodeChatRuntime.ts.ensureServer()`: `createKiloClient` 未传入 `directory` 参数。修复：添加 `directory: vaultPath` 配置项。
+  - `KiloCodeChatRuntime.ts.sendMessage()`: 预热场景下客户端在 vault 路径已知前已创建。修复：支持动态更新客户端配置（`applyVaultPathToClient`），通过 `setConfig` 注入 `x-kilo-directory` 请求头。
 
 ### Changed
 
-- **esbuild 配置**: `@kilocode/sdk` 是纯 ESM 包（exports 仅定义 `"import"` 条件），`format: "cjs"` 下无法解析子路径导出。新增 `kilocode-sdk-resolve` 插件将子路径映射到 `dist/*.js` 实际文件，使 esbuild 在打包时将 ESM 源码转换为 CJS 一并编译。
+- **重构通信层**: `KiloCodeChatRuntime` 废弃 `kilo run <message>` 子进程模式，改用 `@kilocode/sdk` 的 `createKiloServer` / `createKiloClient` API，大幅精简代码（885 行 → ~400 行）
+- **esbuild 配置**: 新增 `kilocode-sdk-resolve` 插件将 ESM-only 的 `@kilocode/sdk` 子路径映射到 `dist/*.js`，使 `format: "cjs"` 下能正确打包。新增 `platform: "node"`；tsconfig 的 `moduleResolution` 改为 `bundler`；jest 添加 `@kilocode/sdk` 模块映射
+- **二进制检测多阶段策略**: `BinaryManager.getBinaryPath()` 按优先级执行 5 阶段检测：手动路径 → 插件目录 → 系统 PATH → 全局 npm → npm 下载。新增 `DetectionResult` 接口和 `autoDetect()` 方法
+- **CLI 配置读取器增强**: `cliConfigReader.ts` 支持多文件名（kilo.jsonc / kilo.json / config.json），新增 JSONC 解析器（注释、尾逗号），移除 apiKey 相关逻辑
+- **模型覆盖修复**: 插件不再硬编码 `modelID` 覆盖 CLI 配置。`defaultModel` 默认值改为空字符串，未显式配置时让 CLI 使用自己的默认模型。设置面板模型下拉框新增 "Use CLI default" 选项
+
+### Added
+
+- **模型选择支持**: `ChatRuntime` 接口新增 `setModel()` / `getModel()` 方法
+- **依赖**: 新增 `@kilocode/sdk: ^7.3.1`
+- **ARCHITECTURE.md / DEVELOPMENT.md / ROADMAP.md**: 新增架构、开发指南和路线图文档
+
+### Removed
+
+- **SSE 事件订阅**: 移除了 `sendMessage()` 中对 `/global/event` 的 SSE 流式订阅逻辑。kilo serve v7.3.1 的所有响应数据通过 `POST /session/{id}/message` 同步返回，SSE 端点不产生实际事件。
 
 ### Added
 

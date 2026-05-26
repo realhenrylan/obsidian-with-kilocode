@@ -97,16 +97,23 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   private abortController: AbortController | null = null;
   private streaming = false;
   private pendingModel: string | null = null;
+  private vaultPath: string | null = null;
 
   constructor(binaryManager: BinaryManager, getSettings: () => KiloCodeSettings) {
     this.binaryManager = binaryManager;
     this.getSettings = getSettings;
   }
 
-  async start(): Promise<void> {
-    if (this.serverHandle && this.client) return;
+  async start(vaultPath?: string): Promise<void> {
+    if (vaultPath) this.vaultPath = vaultPath;
+    if (this.serverHandle && this.client) {
+      // If the client was created without a vault path (e.g. during warmup),
+      // push the directory header now so the CLI knows which vault to operate in.
+      if (this.vaultPath) this.applyVaultPathToClient();
+      return;
+    }
     if (this.startPromise) return this.startPromise;
-    this.startPromise = this.ensureServer();
+    this.startPromise = this.ensureServer(this.vaultPath ?? undefined);
     try {
       await this.startPromise;
     } catch (err) {
@@ -157,7 +164,9 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   }
 
   async *sendMessage(content: string, context?: MessageContext): AsyncGenerator<StreamChunk> {
-    await this.start();
+    // Pass vault path through start() so it's available even when the client
+    // was already created without directory config (e.g. during warmup).
+    await this.start(context?.vaultPath);
     if (!this.client || !this.serverHandle) {
       yield { type: 'error', error: 'KiloCode server is not ready' };
       yield { type: 'done' };
@@ -227,7 +236,20 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     }
   }
 
-  private async ensureServer(): Promise<void> {
+  /** Push the vault directory into the existing client's request headers so the
+   *  CLI knows which vault to operate on. This handles the warmup case where
+   *  the client was created before the vault path was available. */
+  private applyVaultPathToClient(): void {
+    if (!this.vaultPath || !this.client) return;
+    const underlying = (this.client as any)._client;
+    if (underlying?.setConfig) {
+      underlying.setConfig({
+        headers: { 'x-kilo-directory': encodeURIComponent(this.vaultPath) },
+      });
+    }
+  }
+
+  private async ensureServer(vaultPath?: string): Promise<void> {
     const settings = this.getSettings();
     const cliPath = await this.binaryManager.getBinaryPath(settings);
     if (!cliPath) {
@@ -265,6 +287,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.client = createKiloClient({
       baseUrl: this.serverHandle.url,
       fetch: nodeFetch,
+      ...(vaultPath ? { directory: vaultPath } : {}),
     });
   }
 

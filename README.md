@@ -23,6 +23,17 @@
 
 ---
 
+## Documentation
+
+| Document | Audience | Contents |
+|----------|----------|----------|
+| **[ARCHITECTURE.md](ARCHITECTURE.md)** | Contributors | Directory structure, data flow, key components, design decisions, security model |
+| **[DEVELOPMENT.md](DEVELOPMENT.md)** | Developers | Setup, build/test/lint scripts, i18n guide, CI/CD pipeline |
+| **[ROADMAP.md](ROADMAP.md)** | Everyone | Current progress and planned features |
+| **[CHANGELOG.md](CHANGELOG.md)** | Everyone | Version history and release notes |
+
+---
+
 ## ✨ Features
 
 | Feature | Description |
@@ -35,10 +46,8 @@
 | 💬 **Multi-Tab Chat** | Multiple chat tabs with conversation history |
 | 🔄 **Streaming Responses** | Real-time AI responses with interruption support |
 | 🧵 **Conversation Fork/Rewind** | Fork conversations at any message, rewind to previous states |
-| 📦 **Conversation Compaction** | Compress old messages into summaries to save context |
 | 🔌 **MCP Support** | Connect external tools via Model Context Protocol |
 | 🖼️ **Image Attachments** | Paste, drag-drop, or pick images as chat context (5MB limit) |
-| 📄 **Current Note Context** | Toggle active note as AI context input |
 | 🛡️ **Permission System** | Yolo/Normal/Plan security modes with per-tool approval dialogs |
 | 🌍 **i18n** | Multi-language support (English, Chinese, Japanese, Korean, and more) |
 | 📦 **CLI Auto-Download** | Zero-config setup — CLI binary auto-downloads from npm on first use |
@@ -47,31 +56,23 @@
 
 ## 🚀 Quick Start
 
-### Prerequisites
+**Prerequisites**: Obsidian v1.7.2+ (Desktop only)
 
-- **Obsidian** v1.7.2+ (Desktop only)
-
-> **No CLI installation required.** The plugin automatically downloads the platform-appropriate KiloCode CLI binary from npm on first use. If you already have `kilo` installed globally, it will be detected and used.
+> No CLI installation required. The plugin auto-downloads the platform-appropriate KiloCode CLI binary from npm on first use. If you already have `kilo` installed globally, it will be detected and used.
 
 ### Installation
 
-#### From Obsidian Community Plugins (Recommended)
+**From Obsidian Community Plugins (Recommended)**
 
 1. Open Obsidian → Settings → Community plugins → Browse
 2. Search for "KiloCode" and click Install
 3. Enable the plugin
 
-#### From GitHub Release
+**From GitHub Release**
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/realhenrylan/obsidian-with-kilocode/releases/latest)
-2. Create a folder `kilocode` in your vault's plugins folder:
-   ```
-   /path/to/vault/.obsidian/plugins/kilocode/
-   ```
-3. Copy the downloaded files into the `kilocode` folder
-4. Enable the plugin in Obsidian: Settings → Community plugins → Enable "KiloCode"
+Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/realhenrylan/obsidian-with-kilocode/releases/latest) and place in `<vault>/.obsidian/plugins/kilocode/`.
 
-#### From Source (Development)
+**From Source**
 
 ```bash
 cd /path/to/vault/.obsidian/plugins
@@ -87,97 +88,21 @@ npm run build
 
 ### Basic Chat
 
-1. Click the KiloCode icon in the ribbon or use command palette: `KiloCode: Open chat view`
-2. Type your message in the input box
-3. Press `Enter` to send, `Shift+Enter` for new line
-4. AI responses stream in real-time — press `Cancel` to interrupt
+Click the KiloCode icon in the ribbon (or `Command Palette → KiloCode: Open chat view`), type your message, and press `Enter`. Responses stream in real-time — press `Cancel` to interrupt. `Shift+Enter` for new line.
 
-### Input Toolbar
+### Quick Reference
 
-The toolbar above the input box provides quick access buttons:
+| Action | How |
+|--------|-----|
+| **Inline Edit** | Select text → `Ctrl/Cmd+Shift+E` → enter instruction → review diff → Accept/Reject |
+| **Slash Commands** | Type `/` in chat input (`/compact`, `/clear`, `/model`, `/mode`) |
+| **@mention** | Type `@` to reference vault files, folders, MCP servers, or subagents |
+| **Switch Mode** | Click mode toggle or `Shift+Tab` to cycle Code/Plan/Ask |
+| **Fork/Rewind** | Hover a message for ⏪ Rewind, 🍴 Fork, or 📋 Copy |
+| **Image Attach** | Paste (`Ctrl/Cmd+V`), drag-drop, or click the image button |
+| **Note Context** | Toggle the 📄 button to include the active note as AI context |
 
-| Button | Action |
-|--------|--------|
-| `@` | Trigger @mention |
-| `/` | Trigger slash command |
-| 📝 | Instruction preset |
-| 📎 | Attach file |
-| 🖼️ | Attach image |
-| 📄 | Toggle current note as context |
-
-### Inline Edit
-
-1. Select text in a note
-2. Press `Ctrl/Cmd + Shift + E`
-3. Enter your editing instruction in the modal
-4. Review the diff preview (added lines in green, removed in red)
-5. Click **Accept** or **Reject**
-
-### Slash Commands
-
-Type `/` in the input to see available commands. A command palette with keyboard navigation (Arrow/Enter/Escape) will appear:
-
-| Command | Description |
-|---------|-------------|
-| `/compact` | Compress conversation history — replaces old messages with a summary |
-| `/clear` | Clear current conversation |
-| `/model` | Switch AI model |
-| `/mode` | Switch mode (plan/code/ask) |
-
-### @mention
-
-Type `@` to trigger the mention dropdown, which searches across:
-
-| Type | Icon | Description |
-|------|------|-------------|
-| **Vault files** | 📄 | Include file content as AI context |
-| **Folders** | 📁 | Reference vault folders |
-| **MCP servers** | 🔌 | Connect external tools |
-| **Subagents** | 🤖 | Call other AI agents |
-
-Results are grouped by type with up to 20 matches returned.
-
-### Plan Mode
-
-Click the mode toggle button in the chat header or press `Shift+Tab` to cycle through modes:
-
-| Mode | Behavior |
-|------|----------|
-| **Code** | Full read/write access — AI can create and edit files |
-| **Plan** | Read-only — AI explores and designs without making changes |
-| **Ask** | Q&A only — AI answers questions without file access |
-
-The mode prefix is injected into each message, and the active mode is visually indicated in the UI.
-
-### Conversation Management
-
-Messages display action buttons on hover:
-
-- **⏪ Rewind** — Discard all messages after the selected message (with confirmation)
-- **🍴 Fork** — Create a new conversation starting from the selected message
-- **📋 Copy** — Copy message content to clipboard
-
-#### Compaction
-
-When conversations grow long, use `/compact` to replace old messages with a system summary, keeping the N most recent messages intact (configurable in settings, default: 5).
-
-### Image Attachments
-
-You can attach images to your messages in three ways:
-
-1. **File picker** — Click the image button in the toolbar
-2. **Clipboard paste** — Copy an image and paste (`Ctrl/Cmd+V`) into the input area
-3. **Drag & drop** — Drag an image file into the input area
-
-Images are previewed in a grid above the input box with individual remove buttons. Size limit: 5MB per image.
-
-### Current Note Context
-
-Toggle the current note context button in the toolbar to include your active note's content as context for the AI. The toggle state is visually indicated and persists within the session.
-
-### Permission System
-
-Tool calls by the AI are governed by the selected permission mode:
+### Permission Modes
 
 | Mode | Behavior |
 |------|----------|
@@ -185,75 +110,24 @@ Tool calls by the AI are governed by the selected permission mode:
 | **Yolo** | All tools automatically approved — no prompts |
 | **Plan** | Read tools allowed, write tools denied — read-only guarantee |
 
-When a tool requires approval, an `ApprovalModal` dialog appears showing:
-
-- Tool name and description
-- Complete input parameters (formatted JSON)
-- Buttons: **Allow**, **Always Allow** (skip future prompts for this tool), **Deny**, **Cancel**
-
 ---
 
 ## ⚙️ Configuration
 
-### Settings
+Open Settings → KiloCode:
 
-Open Settings → KiloCode to configure:
+| Section | Key Settings |
+|---------|-------------|
+| General | CLI Path (auto-detect), Download Mirror URL, Auto Start |
+| API | API Key, Base URL (leave empty to use CLI's stored credentials) |
+| Chat | Max Tabs (default: 3), Auto Save, Compact Keep Recent (default: 5) |
+| Model | Default Model (default: `claude-sonnet-4-20250514`), Temperature (default: 0.7) |
+| Appearance | Theme (auto/light/dark), Font Size (default: 14px) |
+| Security | Permission Mode (Normal / Yolo / Plan) |
 
-#### General
+**Environment variables**: Configured in Settings → Environment (Shared and KiloCode-specific). When API Key / Base URL are set, they pass `KILO_API_KEY` and `KILO_BASE_URL` to the `kilo serve` process.
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **CLI Path** | Path to KiloCode CLI (leave empty for auto-detect) | Auto-detect |
-| **Download Mirror URL** | Custom mirror URL for CLI binary download | npm registry |
-| **Auto Start** | Start CLI on vault open | Off |
-
-#### API Configuration
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **API Key** | Your API key (password field) | - |
-| **Base URL** | Custom API base URL | - |
-
-> **Note**: `kilo serve` manages its own credentials independently (via CLI keychain or config files). You only need to fill in API Key / Base URL here to **override** the CLI's defaults. If left empty, the plugin uses the CLI's existing credentials automatically.
-
-#### Chat
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Max Tabs** | Maximum number of chat tabs | 3 |
-| **Auto Save** | Automatically save conversation history | On |
-| **Compact Keep Recent** | Messages to keep during compaction | 5 |
-
-#### Model
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Default Model** | Default AI model | claude-sonnet-4-20250514 |
-| **Temperature** | Model temperature (0-1) | 0.7 |
-
-#### Appearance
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Theme** | Color theme (auto/light/dark) | Auto |
-| **Font Size** | Chat message font size | 14px |
-
-#### Security
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Permission Mode** | Normal / Yolo / Plan | Normal |
-
-### Environment Variables
-
-Configure environment variables in Settings → Environment:
-
-- **Shared** — Applied to all providers
-- **KiloCode** — Applied to KiloCode provider only. Passes `KILO_API_KEY` and `KILO_BASE_URL` from settings to the `kilo serve` process when configured; otherwise the CLI uses its own stored credentials. Working directory is set to vault path.
-
-### MCP Servers
-
-Configure MCP servers in `vault/.kilocode/mcp.json`:
+**MCP servers**: Configure in `vault/.kilocode/mcp.json`:
 
 ```json
 {
@@ -274,269 +148,19 @@ Configure MCP servers in `vault/.kilocode/mcp.json`:
 
 ## 🏗️ Architecture
 
-### Directory Structure
-
-```
-src/
-├── main.ts                      # Plugin entry point — registers views, commands, settings, providers
-├── app/
-│   └── settings/
-│       └── defaultSettings.ts    # DEFAULT_SETTINGS constant with all default values
-├── core/
-│   ├── types/
-│   │   └── index.ts              # Core types: Conversation, Message, ToolCallInfo, KiloCodeSettings...
-│   ├── binary/
-│   │   ├── BinaryManager.ts      # CLI binary discovery, download, caching, version management
-│   │   ├── PlatformDetector.ts   # Platform/arch/AVX2/musl detection, npm package name construction
-│   │   └── npmDownloader.ts      # npm tarball download + gzip decompression + tar extraction
-│   ├── providers/
-│   │   ├── types.ts              # Provider protocol: ChatRuntime, ProviderCapabilities, StreamChunk
-│   │   └── ProviderRegistry.ts   # Static registry for AI provider registration/lookup
-│   └── security/
-│       ├── PermissionMode.ts     # Permission types, write/read tool sets
-│       ├── ApprovalManager.ts    # Approval queue management with yolo/normal/plan modes
-│       └── ApprovalModal.ts      # Obsidian Modal dialog for tool call approval
-├── providers/
-│   └── kilocode/
-│       ├── capabilities.ts       # Provider capability declarations
-│       ├── models.ts             # Model definitions (kilo-1, kilo-1-fast)
-│       ├── registration.ts       # Provider registration factory
-│       ├── settings.ts           # Provider-specific settings
-│       └── runtime/
-│           └── KiloCodeChatRuntime.ts  # JSON-RPC over stdio communication with CLI
-├── features/
-│   ├── chat/
-│   │   ├── KiloCodeView.ts       # Main chat ItemView — integrates all chat components
-│   │   ├── PlanModeController.ts # Code/plan/ask mode management
-│   │   ├── controllers/
-│   │   │   ├── StreamController.ts    # Consumes AsyncGenerator, assembles messages
-│   │   │   └── InputController.ts     # Runtime container for send/cancel
-│   │   ├── rendering/
-│   │   │   └── MessageRenderer.ts     # Message→HTML rendering with virtual scrolling
-│   │   ├── services/
-│   │   │   └── ConversationService.ts # Session CRUD with vault persistence
-│   │   ├── tabs/
-│   │   │   ├── Tab.ts                 # Tab state management
-│   │   │   └── TabManager.ts          # Multi-tab lifecycle
-│   │   └── ui/
-│   │       ├── CurrentNoteContext.ts   # Active note context provider
-│   │       ├── ImageContext.ts         # Image attachment manager
-│   │       └── InputToolbar.ts         # Configurable toolbar component
-│   ├── commands/
-│   │   ├── SlashCommand.ts            # CommandRegistry for /commands
-│   │   └── CommandPalette.ts          # Keyboard-navigable command selector
-│   ├── inline-edit/
-│   │   ├── InlineEditModal.ts         # Modal for text selection + edit instruction
-│   │   └── DiffViewer.ts              # Line-by-line diff preview
-│   ├── mcp/
-│   │   ├── MCPManager.ts              # MCP server configuration and connection
-│   │   └── MCPToolAdapter.ts          # Tool format conversion across servers
-│   ├── mention/
-│   │   ├── MentionService.ts          # Search vault files/folders/MCP/subagents
-│   │   └── MentionDropdown.ts         # Grouped result display
-│   └── settings/
-│       └── SettingsTab.ts             # Plugin settings panel (5 sections)
-├── shared/
-│   ├── ErrorNotice.ts                 # Error handling with severity levels
-│   └── VirtualScroller.ts             # Virtual scrolling for large message lists
-├── i18n/
-│   ├── index.ts                       # Translation system (get/set locale, key lookup)
-│   └── locales/
-│       ├── en.json                    # English translations
-│       └── zh.json                    # Chinese translations
-
-styles.css                             # Global styles (brand theme, light/dark)
-```
-
-### Data Flow
-
-```
-User Input → KiloCodeView
-  → PlanModeController (inject mode prefix)
-  → ConversationService (persist user message)
-  → KiloCodeChatRuntime (HTTP serve → CLI via Node.js http module)
-  → AsyncGenerator<StreamChunk>
-  → StreamController (consume chunks, assemble Message)
-  → MessageRenderer (incremental UI updates)
-  → ApprovalManager (intercept dangerous ops)
-     → ApprovalModal (user decision)
-  → ConversationService (persist assistant response)
-```
-
-### Key Components
-
-| Component | Description |
-|-----------|-------------|
-| **BinaryManager** | CLI binary lifecycle manager — discovers existing CLI (user path → system PATH → local cache), auto-downloads from npm when not found, handles version management and macOS quarantine |
-| **PlatformDetector** | Detects platform/arch/AVX2/musl and constructs npm package candidate list for binary download |
-| **npmDownloader** | Downloads npm tarballs, decompresses gzip, parses tar format to extract platform binary |
-| **ProviderRegistry** | Static registry managing AI provider registration. Providers self-register at plugin load. |
-| **ChatRuntime** (interface) | AsyncGenerator-based protocol (`sendMessage` returns `AsyncGenerator<StreamChunk>`). Supports `start/stop/cancel/resetSession/sendApproval`. |
-| **KiloCodeChatRuntime** | Concrete implementation — spawns `kilo serve` HTTP server, communicates via HTTP POST with SSE/ndjson streaming. Uses Node.js `http` module to bypass Electron renderer CORS restrictions (`app://obsidian.md` origin). |
-| **StreamController** | Consumes `AsyncGenerator<StreamChunk>`, handles text/tool_use/tool_result/error/done/approval_required chunk types. Supports AbortController-based cancellation. |
-| **ConversationService** | Full CRUD for conversations with Promise-queue concurrency protection. Stores sessions as JSON files in `.kilocode/sessions/`. Supports fork, rewind, compact, resume operations. |
-| **TabManager** | Manages multiple chat tabs (create/close/switch), persists tab state across sessions. |
-| **PlanModeController** | Cycles between code/plan/ask modes, injects mode-specific system prompt prefixes. |
-| **ApprovalManager** | Manages tool approval queue — yolo (auto-approve), normal (approve writes), plan (deny writes). Always-allow list for persistent tool approvals. |
-| **MessageRenderer** | Renders messages as HTML, handles streaming text append, tool call cards (collapsible), virtual scrolling (>50 messages), action buttons (rewind/fork/copy). |
-| **MCPManager** | Manages MCP server lifecycle — add, remove, list servers and tools. |
-| **MentionService** | Searches vault files, folders, MCP servers, and subagents for @mention autocomplete. |
-
-### Design Decisions
-
-- **AsyncGenerator pattern** (vs. callbacks): `sendMessage` returns `AsyncGenerator<StreamChunk>` for natural streaming consumption via `for-await-of`
-- **AbortController**: Used for stream cancellation — breaks the `for-await` loop cleanly
-- **Promise queue**: `ConversationService` uses sequential Promise execution to prevent concurrent modification race conditions
-- **Virtual scrolling**: Auto-enabled when message list exceeds 50 items, only renders viewport-visible messages
-- **CustomEvent bubbling**: Components communicate via DOM CustomEvents for loose coupling
-- **Node.js `http` module (vs. `fetch`)**: `KiloCodeChatRuntime` uses Node.js `http` for HTTP requests instead of browser `fetch()`, because Electron's renderer process enforces CORS — the `app://obsidian.md` origin cannot access `http://127.0.0.1`. Node.js `http` runs entirely outside the browser security boundary, avoiding CORS entirely.
-- **Binary auto-download**: `BinaryManager` uses npm registry as primary source (no extra CI needed), falls back to user-configured mirror URL; lazy path resolution in `start()` keeps `createRuntime` synchronous
-
----
-
-## 🛡️ Security Model
-
-The plugin implements a multi-layer security architecture for AI tool execution:
-
-### Permission Modes
-
-Three modes control how AI tool calls are handled:
-
-| Mode | Read Tools | Write Tools | Use Case |
-|------|-----------|-------------|----------|
-| **Yolo** | Auto-approve | Auto-approve | Trusted environments, rapid prototyping |
-| **Normal** | Auto-approve | Require approval | Daily development (default) |
-| **Plan** | Auto-approve | Denied | Code review, architecture discussions |
-
-### Write Tools (require approval in normal mode)
-
-| Tool | Description |
-|------|-------------|
-| `write_file` | Create or overwrite files |
-| `edit_file` | Modify existing files |
-| `delete_file` | Remove files |
-| `bash` | Execute shell commands |
-| `execute_command` | Run arbitrary commands |
-
-### Approval Modal
-
-When a write tool requires approval, the `ApprovalModal` dialog shows:
-
-- Tool name and description
-- Complete input parameters rendered as formatted JSON in a `<pre><code>` block
-- Decision buttons: **Allow** (one-time), **Always Allow** (persistent for this tool), **Deny**, **Cancel**
-
----
-
-## 🎨 Design System
-
-### Brand Colors
-
-| Color | Hex | Usage |
-|-------|-----|-------|
-| **KiloCode Yellow** | `#FFB800` | Primary accent |
-| **Light Yellow** | `#FFD54F` | Hover states |
-| **Dark Yellow** | `#E5A600` | Active states |
-
-### Theme Support
-
-- Automatic light/dark theme detection
-- Follows Obsidian's theme settings via CSS custom properties
-- CSS variables for easy customization
+See [ARCHITECTURE.md](ARCHITECTURE.md) for directory structure, data flow diagram, key component descriptions, design decisions, and security model details.
 
 ---
 
 ## 🛠️ Development
 
-### Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/realhenrylan/obsidian-with-kilocode.git
-cd obsidian-kilocode
-
-# Install dependencies
-npm install
-
-# Start development mode (watch mode with esbuild)
-npm run dev
-
-# Build for production
-npm run build
-
-# Run tests
-npm test
-
-# Run linter
-npm run lint
-```
-
-### Scripts
-
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Development mode with esbuild watch |
-| `npm run build` | Production build |
-| `npm test` | Run all Jest tests |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run test:coverage` | Run tests with coverage report |
-| `npm run lint` | Run ESLint |
-| `npm run lint:fix` | Fix ESLint errors automatically |
-| `npm run typecheck` | TypeScript type check (`tsc --noEmit`) |
-
-### Testing
-
-The test suite covers:
-
-- **Unit tests**: ProviderRegistry, StreamController, InputController, TabManager, ConversationService, MessageRenderer, CommandRegistry, PlanModeController, MCPManager, KiloCodeChatRuntime, i18n, ApprovalManager, ImageContext, CurrentNoteContext, InputToolbar
-- **Integration tests**: Chat workflow (TabManager + StreamController + InputController + PlanModeController), conversation management (fork/rewind/compact/resume), streaming pipeline
-
-```bash
-# Run all tests
-npm test
-
-# Run with coverage
-npm run test:coverage
-```
-
-### i18n
-
-Adding a new language:
-
-1. Create `src/i18n/locales/{lang}.json` following the structure of `en.json`
-2. The i18n system auto-detects the locale and falls back to `en` for missing keys
-3. Translation keys use dot notation (e.g., `settings.cliPathDesc`) with `{{param}}` substitution
-
-### CI/CD
-
-- **CI** (`.github/workflows/ci.yml`): Runs on push/PR to main — typecheck → lint → build → test
-- **Release** (`.github/workflows/release.yml`): On tag `v*` — build → create GitHub Release with `main.js`, `manifest.json`, `styles.css`
+See [DEVELOPMENT.md](DEVELOPMENT.md) for setup, build/test/lint commands, i18n guide, and CI/CD pipeline.
 
 ---
 
 ## 📋 Roadmap
 
-- [x] Basic chat functionality
-- [x] Streaming responses with interruption
-- [x] Multi-tab support with state persistence
-- [x] Conversation management (CRUD, fork, rewind, compact, resume)
-- [x] Inline edit with diff preview
-- [x] Slash commands with command palette
-- [x] @mention (files, folders, MCP servers, subagents)
-- [x] Plan mode (code/plan/ask)
-- [x] MCP server support
-- [x] Permission system (yolo/normal/plan) with approval dialogs
-- [x] Image attachments (paste, drag-drop, file picker)
-- [x] Current note context toggle
-- [x] Input toolbar
-- [x] i18n (English, Chinese)
-- [x] Virtual scrolling for large conversations
-- [x] Error handling with severity levels
-- [x] CLI binary auto-download (zero-config setup)
-- [x] Streaming performance optimization (rAF scroll throttle, debounced writes, SSE chunk merge)
-- [ ] Additional language support
-- [ ] Custom theme support
-- [ ] Plugin API for third-party extensions
+See [ROADMAP.md](ROADMAP.md) for current progress and planned features.
 
 ---
 
@@ -544,66 +168,33 @@ Adding a new language:
 
 ### KiloCode CLI not found
 
-```
-Error: KiloCode CLI not found
-```
-
-The plugin automatically downloads the CLI on first use. If auto-download fails:
-
+The plugin auto-downloads the CLI on first use. If it fails:
 1. Check your internet connection
-2. Try setting a mirror URL in Settings → General → Download Mirror URL
-3. Or install manually: `npm install -g @kilocode/cli`
-4. Verify installation: `kilo --version`
+2. Set a mirror URL in Settings → General → Download Mirror URL
+3. Install manually: `npm install -g @kilocode/cli`
+4. Verify: `kilo --version`
 
 ### CLI Path Issues
 
-If using a version manager (nvm, fnm, volta):
+Leave empty for auto-detection. If needed, find the path with `which kilo` (macOS/Linux) or `where.exe kilo` (Windows) and set in Settings → General → CLI Path.
 
-1. Leave CLI path empty for auto-detection
-2. If auto-detection fails, find your CLI path:
-   ```bash
-   which kilo  # macOS/Linux
-   where.exe kilo  # Windows
-   ```
-3. Set the path in Settings → General → CLI Path
+### JSON-RPC Errors
 
-### JSON-RPC Communication Errors
-
-If the CLI starts but responses fail:
-
-1. Check that `@kilocode/cli` is up to date: `npm update -g @kilocode/cli`
-2. Verify your API key is configured correctly
-3. Check the CLI process logs for errors
+Ensure `@kilocode/cli` is up to date (`npm update -g @kilocode/cli`) and verify your API key.
 
 ### Network Errors
 
-1. Check your internet connection
-2. Verify API key is correct
-3. Check firewall settings (the CLI needs outbound HTTPS access)
-4. Try increasing timeout in Settings → Advanced
+Check internet connection, API key, and firewall settings (CLI needs outbound HTTPS).
 
 ### Conversation Persistence Issues
 
-Conversations are stored in `.kilocode/sessions/` in your vault. If you experience data loss:
-
-1. Check the folder exists and is writable
-2. Verify `Auto Save` is enabled in Settings → Chat
-3. Check for disk space or permissions issues
+Conversations are stored in `.kilocode/sessions/`. Check the folder is writable and Auto Save is enabled.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- [Obsidian](https://obsidian.md) for the amazing platform
-- [KiloCode](https://kilo.ai) for the AI coding agent
-- [Claudian](https://github.com/YishenTu/claudian) for architectural inspiration
-- All contributors and testers
+MIT — see [LICENSE](LICENSE).
 
 ---
 
