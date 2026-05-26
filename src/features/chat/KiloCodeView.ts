@@ -2,7 +2,7 @@
 // 閲嶆瀯锛氬€熼壌 claudian 鏋舵瀯锛孌OM 楠ㄦ灦鍙垱寤轰竴娆★紝閫氳繃 updateUI() 鏇存柊鍐呭
 // 瑙ｅ喅锛?1) 鏃犳硶鍙戦€佺浜屾潯娑堟伅 (2) 鍒囨崲浼氳瘽娑堟伅娑堝け (3) 閲嶅惎鍚庢棤娉曞彂閫?
 
-import { ItemView, MarkdownView, Notice, WorkspaceLeaf } from 'obsidian';
+import { FileSystemAdapter, ItemView, MarkdownView, Notice, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_KILOCODE } from '../../core/types';
 import type { ToolCallInfo, Message } from '../../core/types';
 import type KiloCodePlugin from '../../main';
@@ -658,8 +658,10 @@ export class KiloCodeView extends ItemView {
 
       this.approvalManager.setPermissionMode(this.plugin.settings.permissionMode);
 
+      const adapter = this.plugin.app.vault.adapter;
+      const vaultPath = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : '';
       const generator = runtime.sendMessage(content, {
-        vaultPath: this.plugin.app.vault.adapter.getBasePath(),
+        vaultPath,
         currentNote: currentNote || this.getCurrentNotePath(),
       });
 

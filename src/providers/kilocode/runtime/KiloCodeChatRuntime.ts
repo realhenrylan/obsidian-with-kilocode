@@ -282,7 +282,6 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       hostname: '127.0.0.1',
       port: 0,
       timeout: SERVE_TIMEOUT,
-      cors: ['app://obsidian.md'],
     });
     this.client = createKiloClient({
       baseUrl: this.serverHandle.url,
