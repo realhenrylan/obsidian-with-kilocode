@@ -20,6 +20,8 @@ export const DEFAULT_KILOCODE_SETTINGS: KiloCodeSettings = {
   compactKeepRecent: 5,
   permissionMode: 'normal',
   mirrorUrl: '',
+  idleTimeoutSeconds: 600,
+  autoReview: false,
 };
 
 export function getKiloCodeSettings(settings: Record<string, unknown>): KiloCodeSettings {

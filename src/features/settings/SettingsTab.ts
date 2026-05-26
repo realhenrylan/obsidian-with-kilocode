@@ -156,6 +156,28 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    new Setting(containerEl)
+      .setName('Idle Timeout (seconds)')
+      .setDesc('Auto-stop KiloCode CLI after this many seconds of inactivity. Set to 0 to keep the process running (not recommended \u2014 wastes tokens). Default: 600s (10 minutes).')
+      .addSlider(slider => slider
+        .setLimits(0, 600, 10)
+        .setValue(this.plugin.settings.idleTimeoutSeconds)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.idleTimeoutSeconds = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Auto Review')
+      .setDesc('After each AI response, automatically review modified files for potential issues. Uses a separate CLI process.')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.autoReview)
+        .onChange(async (value) => {
+          this.plugin.settings.autoReview = value;
+          await this.plugin.saveSettings();
+        }));
+
     // === 聊天设置 ===
     containerEl.createEl('h3', { text: 'Chat' });
 

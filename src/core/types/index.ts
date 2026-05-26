@@ -106,6 +106,17 @@ export interface KiloCodeSettings {
   permissionMode: 'yolo' | 'normal' | 'plan';
   /** 下载镜像源基础 URL。空字符串表示使用 npm 官方源。 */
   mirrorUrl: string;
+  /**
+   * 空闲超时秒数。
+   * kilo serve 在无消息活动 N 秒后自动停止，下次发消息自动重启。
+   * 设为 0 表示禁用超时（进程持续运行）。默认 120 秒。
+   */
+  idleTimeoutSeconds: number;
+  /**
+   * 自动审查：AI 回复完成后自动对修改的文件进行审查。
+   * 使用独立的 kilo serve 进程进行只读审查，发现问题时弹出 Notice。
+   */
+  autoReview: boolean;
 }
 
 /** 视图类型常量 */

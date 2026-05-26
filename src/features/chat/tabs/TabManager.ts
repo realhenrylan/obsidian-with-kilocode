@@ -22,9 +22,12 @@ export class TabManager {
     return tab;
   }
 
-  /** 关闭标签页，返回是否成功关闭 */
-  closeTab(tabId: string): boolean {
-    if (!this.tabs.has(tabId)) return false;
+  /** 关闭标签页并清理 runtime，返回是否成功关闭 */
+  async closeTab(tabId: string): Promise<boolean> {
+    const tab = this.tabs.get(tabId);
+    if (!tab) return false;
+
+    await tab.disposeRuntime();
     this.tabs.delete(tabId);
     if (this.activeTabId === tabId) {
       const remaining = Array.from(this.tabs.keys());
@@ -82,5 +85,12 @@ export class TabManager {
     this.activeTabId = state.activeTabId && this.tabs.has(state.activeTabId)
       ? state.activeTabId
       : null;
+  }
+
+  /** 关闭所有标签并清理所有 runtime */
+  async disposeAllRuntimes(): Promise<void> {
+    for (const tab of this.tabs.values()) {
+      await tab.disposeRuntime();
+    }
   }
 }
