@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.9.3] - 2026-05-27
+
+### Changed
+
+- **README 产品定位重构**: Hero 定位从"你的 Obsidian 知识库就是上下文"改为"An Obsidian plugin that turns your vault into persistent memory for KiloCode"。新增"问题 (The Problem)"、"什么是记忆系统"、"变化对比 (Before/After)"三个章节，将产品叙事从"双向桥梁/聊天面板"升级为"KiloCode 的长期记忆系统"
+- **manifest.json**: 插件描述更新为聚焦 persistent memory 价值
+- **package.json**: 描述和关键词更新，新增 persistent-memory、ai-memory 标签
+- **README_CN.md**: 与英文版同步重写
+
 ## [0.9.2] - 2026-05-27
 
 ### Added
@@ -29,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 
 - **defaultSettings.ts**: 新增 `customInstructions: ''` 字段
+- **项目清理**: 删除 docs/、findings.md、git_orig.ts、git_original.ts、progress.md、task_plan.md 等个人临时文件；更新 .gitignore 移除 styles.css（源文件应被跟踪）、新增 docs/ 和 *.orig* 模式
 
 ## [0.9.1] - 2026-05-27
 

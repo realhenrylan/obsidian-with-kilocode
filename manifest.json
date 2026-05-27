@@ -3,7 +3,7 @@
   "name": "KiloCode",
   "version": "0.8.0",
   "minAppVersion": "1.7.2",
-  "description": "KiloCode AI coding agent embedded in Obsidian sidebar. Your vault becomes the agent's working directory.",
+  "description": "Give KiloCode persistent project memory from your Obsidian vault. Architecture decisions, skills, workflows, and sessions — all stored in your vault.",
   "author": "Henry Lan",
   "authorUrl": "https://github.com/realhenrylan",
   "isDesktopOnly": true

@@ -1,7 +1,7 @@
 {
   "name": "obsidian-kilocode",
   "version": "0.8.0",
-  "description": "KiloCode AI coding agent embedded in Obsidian sidebar",
+  "description": "Persistent memory for KiloCode — an Obsidian plugin that turns your vault into the agent's long-term memory",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
@@ -18,7 +18,10 @@
     "obsidian-plugin",
     "kilocode",
     "ai",
-    "coding-agent"
+    "coding-agent",
+    "persistent-memory",
+    "ai-memory",
+    "knowledge-management"
   ],
   "author": "Henry Lan",
   "license": "MIT",

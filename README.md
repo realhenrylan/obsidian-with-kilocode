@@ -10,7 +10,13 @@
 <h1 align="center">KiloCode for Obsidian</h1>
 
 <p align="center">
-  <strong>Your Obsidian vault is the context. KiloCode CLI is the engine. They speak to each other through this plugin.</strong>
+  <strong>An Obsidian plugin that turns your vault into persistent memory for KiloCode.</strong>
+</p>
+
+<p align="center">
+  Stop losing context every time the conversation resets.<br />
+  Your KiloCode agent remembers architecture decisions, project context,<br />
+  reusable workflows, coding standards, and previous sessions — from your vault.
 </p>
 
 <p align="center">
@@ -23,19 +29,36 @@
 
 ---
 
-## How It Works — The Fusion
+## The Problem
 
-KiloCode for Obsidian is not just "a chat panel in your sidebar." It's a **bidirectional bridge** between your knowledge base (Obsidian vault) and a general-purpose AI coding agent (KiloCode CLI).
+KiloCode is powerful. But like every AI coding agent, it has a fundamental flaw:
+
+**It forgets everything between sessions.**
+
+Every conversation reset means:
+- Lost architecture context — you re-explain the same decisions
+- Forgotten coding standards — the agent repeats the same mistakes
+- Inconsistent workflows — no two sessions produce the same result
+- Repeated prompting — you type the same instructions again and again
+
+This plugin is the fix: **your Obsidian vault becomes KiloCode's long-term memory.**
+
+---
+
+## What This Plugin Does
+
+KiloCode for Obsidian is a bidirectional bridge between your knowledge base (Obsidian vault) and the KiloCode CLI. The vault doesn't just store notes — it stores memory for your coding agent.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                     Obsidian Vault                            │
+│               (Persistent Memory Layer)                       │
 │                                                               │
 │  ┌──────────┐  ┌──────────────┐  ┌───────────────────────┐   │
-│  │ Your     │  │ .kilo/skills/ │  │ .kilocode/sessions/   │   │
-│  │ Notes    │  │ (AI skills    │  │ (conversation history) │   │
-│  │ (.md)    │  │  live in the  │  │                        │   │
-│  │          │  │  vault!)      │  │                        │   │
+│  │ Notes    │  │ .kilo/skills/ │  │ .kilocode/sessions/   │   │
+│  │ (.md)    │  │ (AI skills   │  │ (conversation history) │   │
+│  │          │  │  live in the │  │                        │   │
+│  │          │  │  vault!)     │  │                        │   │
 │  └──────────┘  └──────────────┘  └───────────────────────┘   │
 │         ▲              ▲                      ▲               │
 │         │              │                      │               │
@@ -46,8 +69,8 @@ KiloCode for Obsidian is not just "a chat panel in your sidebar." It's a **bidir
 │            │   (this plugin)       │                          │
 │            │                       │                          │
 │            │  @mention vault files │                          │
-│            │  Attach notes as ctx  │                          │
 │            │  Inject skills        │                          │
+│            │  Attach notes as ctx  │                          │
 │            │  Route conversation   │                          │
 │            └───────────┬───────────┘                          │
 │                        │ HTTP (127.0.0.1)                     │
@@ -63,17 +86,37 @@ KiloCode for Obsidian is not just "a chat panel in your sidebar." It's a **bidir
             └─────────────────────────┘
 ```
 
-### What makes them fused, not just connected?
+### What makes it a memory system, not just a chat panel?
 
-- **Vault-aware context**: The plugin passes the vault's filesystem path to the CLI, so KiloCode knows exactly where your notes live. It can read, write, and manipulate vault files directly.
-- **Skills live in your vault**: AI skill definitions are stored as Markdown files inside your vault at `.kilo/skills/`. They're auto-injected into every AI conversation as system context — edit a skill, and the AI's behavior changes instantly. No config file toggling, no CLI restarts.
-- **Reference anything with @**: Type `@` in chat to search and reference vault files, folders, MCP servers, or subagents. The content flows from your vault into the AI conversation seamlessly.
-- **One-click note context**: Toggle "Include current note" and the active note's full content is sent to the AI as context. No copy-paste, no file selection — just a button.
-- **File attachments**: Drag, paste, or click to attach files from your system into the conversation. Text files are read and sent inline to the AI.
-- **Conversations stored in the vault**: Every chat session is persisted to `.kilocode/sessions/` inside your vault — version-controlled, portable, backed up with your notes.
-- **MCP servers configured in the vault**: `.kilocode/mcp.json` defines tools the AI can use. Edit this file to give the AI new capabilities.
-- **Zero-install CLI**: The KiloCode CLI binary auto-downloads on first use. No `npm install -g`, no PATH management. The plugin manages the entire lifecycle — start, keep-alive with HTTP connection pooling, idle timeout, and graceful shutdown.
-- **Your existing CLI config, respected**: If you already use KiloCode CLI, you have config at `~/.config/kilo/kilo.jsonc` (or `kilo.json`). The plugin reads it directly — API keys, model selections, agent settings. No need to re-enter credentials in the plugin settings panel. The `/model` slash command even lists models from your CLI config. Configure once in your terminal, use everywhere in Obsidian.
+- **Persistent project memory**: Architecture decisions, coding standards, and project knowledge live in your vault as markdown. KiloCode reads them as context — every session, every message. No context is ever lost.
+- **Skills stored in your vault**: AI skill definitions live at `.kilo/skills/` as `.md` files. Edit a skill, and KiloCode's behavior changes instantly. No config toggling, no CLI restarts.
+- **Session history in your vault**: Every conversation persists to `.kilocode/sessions/` — version-controlled, backed up with your notes, searchable across sessions.
+- **Reference anything with @**: Type `@` to search and reference vault files, folders, MCP servers, or subagents. Content flows from your memory into the conversation seamlessly.
+- **One-click note context**: Toggle "Include current note" and the active note's full content is sent to the AI as context — no copy-paste.
+- **File attachments**: Drag, paste, or click to attach files. Text files are read inline and sent to the AI.
+- **MCP servers configured in the vault**: `.kilocode/mcp.json` defines tools the AI can use. Edit this file to give KiloCode new capabilities.
+- **Zero-install CLI**: The KiloCode CLI auto-downloads on first use. The plugin manages its entire lifecycle — start, keep-alive, idle timeout, and graceful shutdown.
+- **Your existing CLI config, respected**: If you already use KiloCode CLI, the plugin reads `~/.config/kilo/kilo.jsonc` directly — API keys, model selections, agent settings. Configure once in your terminal, use everywhere in Obsidian.
+
+---
+
+## What Changes
+
+### Before
+
+KiloCode forgets everything when the conversation ends:
+- Architecture decisions are lost
+- Workflows reset every session
+- Coding standards must be re-explained
+- Reusable patterns never accumulate
+
+### After
+
+Your Obsidian vault becomes KiloCode's persistent memory:
+- Architecture is always loaded as context
+- Skills are always available (markdown files in vault)
+- Previous sessions are searchable and reusable
+- Project knowledge accumulates over time
 
 ---
 
@@ -90,8 +133,8 @@ KiloCode for Obsidian is not just "a chat panel in your sidebar." It's a **bidir
 
 ## Features
 
-| Feature | What it fuses |
-|---------|---------------|
+| Feature | How it builds memory |
+|---------|---------------------|
 | **AI Chat Sidebar** | Chat with KiloCode AI in Obsidian's sidebar. Each message carries your vault path, active note, and installed skills as context — the AI knows your vault. |
 | **@mention Vault Files** | Type `@` to search and reference any vault file or folder. The content flows from your notes into the conversation — no copy-paste. |
 | **Custom Instructions** | Click `#` to open an instruction editor — write custom system prompts that get injected into the current conversation. Auto-saved, applied per session. |
