@@ -82,9 +82,9 @@ describe('CommandRegistry', () => {
 });
 
 describe('createDefaultCommandRegistry', () => {
-  test('returns registry with 4 commands', () => {
+  test('returns registry with 6 commands', () => {
     const registry = createDefaultCommandRegistry();
-    expect(registry.getAll()).toHaveLength(4);
+    expect(registry.getAll()).toHaveLength(6);
   });
 
   test('contains compact command', () => {
@@ -106,14 +106,14 @@ describe('createDefaultCommandRegistry', () => {
     const registry = createDefaultCommandRegistry();
     const cmd = registry.get('model');
     expect(cmd).toBeDefined();
-    expect(cmd!.name).toBe('/model');
+    expect(cmd!.name).toBe('/model <name>');
   });
 
   test('contains mode command', () => {
     const registry = createDefaultCommandRegistry();
     const cmd = registry.get('mode');
     expect(cmd).toBeDefined();
-    expect(cmd!.name).toBe('/mode');
+    expect(cmd!.name).toBe('/mode <plan|code|ask>');
     expect(cmd!.description).toBe('Switch mode (plan/code/ask)');
   });
 

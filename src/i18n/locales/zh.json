@@ -41,6 +41,8 @@
     "files": "文件",
     "folders": "文件夹",
     "tags": "标签",
+    "mcpServers": "MCP 服务",
+    "subagents": "子代理",
     "noResults": "未找到结果"
   },
   "settings": {

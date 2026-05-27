@@ -191,9 +191,127 @@ export function mergeCliConfigIntoSettings(
 }
 
 /**
+ * 从 CLI 配置提取所有模型 ID（去重）。
+ * 扫描 model、small_model、agent.*.model 字段。
+ */
+export function readCliModels(): string[] {
+  const configPath = getCliConfigPath();
+  try {
+    if (!fs.existsSync(configPath)) return [];
+    const raw = fs.readFileSync(configPath, 'utf-8');
+    let config: any;
+    try {
+      config = JSON.parse(raw);
+    } catch {
+      config = parseJsonC(raw);
+    }
+    if (typeof config !== 'object' || config === null) return [];
+    const models = new Set<string>();
+    if (config.model && typeof config.model === 'string') models.add(config.model);
+    if (config.small_model && typeof config.small_model === 'string') models.add(config.small_model);
+    if (config.agent && typeof config.agent === 'object' && config.agent !== null) {
+      for (const key of Object.keys(config.agent)) {
+        const agent = config.agent[key];
+        if (agent && typeof agent === 'object' && agent.model && typeof agent.model === 'string') {
+          models.add(agent.model);
+        }
+      }
+    }
+    return Array.from(models).sort();
+  } catch {
+    return [];
+  }
+}
+
+/**
  * 检查 CLI 配置文件中是否有 API key（仅用于 UI 显示"已配置"状态）。
  */
 export function cliHasApiKey(): boolean {
   const config = readCliConfig();
   return !!config.apiKey;
+}
+
+/** CLI 配置中的 MCP 服务器项 */
+export interface CliMcpServer {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+/**
+ * 从 CLI 配置读取 MCP 服务器列表。
+ * 读取 `config.mcp` 字段，过滤掉未启用的服务器。
+ */
+export function readCliMcpServers(): CliMcpServer[] {
+  const configPath = getCliConfigPath();
+  try {
+    if (!fs.existsSync(configPath)) return [];
+    const raw = fs.readFileSync(configPath, 'utf-8');
+    let config: any;
+    try {
+      config = JSON.parse(raw);
+    } catch {
+      config = parseJsonC(raw);
+    }
+    if (typeof config !== 'object' || config === null) return [];
+    const mcpSection = config.mcp;
+    if (typeof mcpSection !== 'object' || mcpSection === null) return [];
+    const servers: CliMcpServer[] = [];
+    for (const key of Object.keys(mcpSection)) {
+      const s = mcpSection[key];
+      if (s && typeof s === 'object' && s.enabled !== false) {
+        const cmd = Array.isArray(s.command) ? s.command.join(' ') : (s.command || '');
+        servers.push({
+          id: key,
+          name: key,
+          description: cmd || undefined,
+        });
+      }
+    }
+    return servers;
+  } catch {
+    return [];
+  }
+}
+
+/** CLI 配置中的子代理项 */
+export interface CliSubagent {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+/**
+ * 从 CLI 配置读取子代理（agent）列表。
+ * 读取 `config.agent` 字段。
+ */
+export function readCliSubagents(): CliSubagent[] {
+  const configPath = getCliConfigPath();
+  try {
+    if (!fs.existsSync(configPath)) return [];
+    const raw = fs.readFileSync(configPath, 'utf-8');
+    let config: any;
+    try {
+      config = JSON.parse(raw);
+    } catch {
+      config = parseJsonC(raw);
+    }
+    if (typeof config !== 'object' || config === null) return [];
+    const agentSection = config.agent;
+    if (typeof agentSection !== 'object' || agentSection === null) return [];
+    const agents: CliSubagent[] = [];
+    for (const key of Object.keys(agentSection)) {
+      const a = agentSection[key];
+      if (a && typeof a === 'object') {
+        agents.push({
+          id: key,
+          name: key,
+          description: a.model ? `model: ${a.model}` : undefined,
+        });
+      }
+    }
+    return agents;
+  } catch {
+    return [];
+  }
 }

@@ -117,6 +117,8 @@ export interface KiloCodeSettings {
    * 使用独立的 kilo serve 进程进行只读审查，发现问题时弹出 Notice。
    */
   autoReview: boolean;
+  /** 自定义指令文本，用户通过 # 按钮编辑，持久化保存 */
+  customInstructions: string;
 }
 
 /** 视图类型常量 */

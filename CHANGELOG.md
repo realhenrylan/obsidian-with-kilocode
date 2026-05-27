@@ -4,7 +4,95 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.9.2] - 2026-05-27
+
+### Added
+
+- **Slash Command 完整实现**: CommandPalette 从 stub 实现为完整命令面板，支持二级子菜单（`/skill` 展示技能列表、`/model` 列出 CLI 模型支持自定义输入、`/mode` 切换 plan/code/ask、`/compact` 压缩会话、`/clear` 新建会话），键盘导航（↑↓EnterEsc），子菜单后退/关闭按钮（`src/features/commands/CommandPalette.ts`, `SlashCommand.ts`, `KiloCodeView.ts`）
+- **@mention 完整实现**: MentionDropdown 新增键盘导航（↑↓EnterEsc）与选中态 CSS 样式，MentionService 新增前缀匹配优先+子串回退搜索策略、递归文件夹搜索、MentionContext 接口，类型标题使用 i18n 翻译键（`src/features/mention/MentionDropdown.ts`, `MentionService.ts`）
+- **Custom Instruction Modal**: `#` 工具栏按钮从 stub 实现为完整的 CustomInstructionModal，支持编辑/保存/Apply 自定义指令，持久化至插件设置（`src/features/chat/ui/CustomInstructionModal.ts`, `KiloCodeView.ts`）
+- **File Attachment 完整实现**: `attachFile()` 从 stub 实现为 FileAttachmentContext，支持系统文件选择器，文本文件内容自动注入到消息，预览芯片渲染（`src/features/chat/ui/FileAttachmentContext.ts`, `KiloCodeView.ts`）
+- **Plugin 生命周期增强**: KiloCodePlugin 新增 runtime 集合管理、后台预热（autoStart 启用时异步预启动 CLI）、技能热重载监听器（SkillWatcher）、退出处理器（process.on('exit') 兜底清理子进程）、onunload 统一清理所有 runtime（`src/main.ts`）
+- **技能管理命令**: 新增 "List available skills" 和 "Install skill: <name>" 命令，自动为每个内置技能生成独立安装命令（`src/main.ts`）
+- **KillSync**: ChatRuntime 接口新增 `killSync?()` 方法，KiloCodeChatRuntime 实现同步强制终止 CLI 进程，用于进程退出兜底清理（`src/core/providers/types.ts`, `KiloCodeChatRuntime.ts`）
+- **Custom Instructions 注入**: KiloCodeChatRuntime.sendMessage() 在消息尾附加 `[User Custom Instructions]` 块（`KiloCodeChatRuntime.ts`）
+- **新增 UI 组件**: MentionCategoryMenu（@mention 分类选择）、ListSelectModal（MCP/Subagent 选择）、VaultFileBrowserModal（文件浏览器）（`src/features/mention/`）
+- **i18n**: 新增 `mention.mcpServers`、`mention.subagents` 翻译键（`src/i18n/locales/en.json`, `zh.json`）
+- **CSS 样式**: 文件预览芯片、命令面板、子菜单、@mention 下拉、自定义指令模态框、文件浏览器、列表选择模态框全套样式（`styles.css`）
+- **测试 Mock**: obsidian mock 新增 TFile、TFolder 类（`tests/__mocks__/obsidian.ts`）
+- **Mention 测试**: 新增 `tests/features/mention/` 测试目录
+
+### Removed
+
+- **图片附件功能**: `capabilities.ts` 中 `supportsImageAttachments` 设为 false，移除 README 中图片附件的功能宣称
+
+### Changed
+
+- **defaultSettings.ts**: 新增 `customInstructions: ''` 字段
+
+## [0.9.1] - 2026-05-27
+
+### Added
+
+- **自定义指令编辑器**: `#` 工具栏按钮已从存 stub 实现为完整的浮动弹窗（`CustomInstructionModal`），支持编辑自定义指令文本并应用到当前对话 session。文本自动保存至插件设置（data.json），点击 Apply 后注入 system prompt，切换 session 需重新 Apply（`src/features/chat/ui/CustomInstructionModal.ts`, `KiloCodeChatRuntime.ts`, `KiloCodeView.ts`）
+
+### Removed
+
+- **图片附件功能**: 移除图片附件（粘贴/拖拽/按钮）功能。该功能通过 `FilePartInput` 向 CLI 发送图片但 AI 模型无法识别，属于不完整实现。移除 `ImageContext` 在 `KiloCodeView` 中的所有引用、工具栏 "Attach image" 按钮、粘贴/拖拽图片事件处理、`MessageContext.images` 字段、Runtime 中的 `FilePartInput` 图片 part 构建逻辑（`KiloCodeView.ts`, `KiloCodeChatRuntime.ts`, `types.ts`, `capabilities.ts`）
+
+### Fixed
+
+- **图片附件未发送**: 修复图片附加功能实际未将图片发送给 AI 的问题。根因：`KiloCodeView` 获取了图片但未传递给 `runtime.sendMessage()` 和 `userMessage`；`KiloCodeChatRuntime.sendMessage()` 仅发送文本 part，未包含图片 `FilePartInput`。修复：`MessageContext` 新增 `images` 字段，Runtime 将图片作为 `{ type: 'file', mime, filename, url }` part 发送，View 层将 images 传入 runtime 并保存到消息历史（`src/core/providers/types.ts`, `KiloCodeChatRuntime.ts`, `KiloCodeView.ts`）
+
+## [0.9.0] - 2026-05-26
+
+### Added
+
+- **文件附件功能**: `FileAttachmentContext` 支持通过系统文件选择器附加任意文件，文本文件内容随消息发送给 AI，二进制文件标注文件名和大小。输入区域显示文件预览芯片（名称+大小+删除按钮）。工具栏 "Attach vault file" 图标修复为 📎；"Attach image" 修复为 🖼️；"Current note" 修复为 📝（`src/features/chat/ui/FileAttachmentContext.ts`）
+- **@mention 交互系统**: 实现完整的 @mention 流程 — 工具栏 `@` 按钮和输入框 `@` 字符触发搜索下拉，支持文件/文件夹/MCP 服务器/subagent 四种类型搜索。前缀匹配优先，无结果回退子串匹配。键盘导航 ↑↓EnterEsc（`src/features/mention/@Parser.ts`, `MentionService.ts`, `MentionDropdown.ts`）
+- **斜杠命令面板**: `CommandPalette` 支持级联子菜单，`/skill` 展示可用技能列表选中后注入提示词，`/model` 展示 CLI 配置中的模型列表支持切换和自定义输入，`/mode` 切换 plan/code/ask 模式，`/compact` 压缩会话，`/clear` 新建会话（`src/features/commands/CommandPalette.ts`, `SlashCommand.ts`）
+- **CLI 配置读取器**: `cliConfigReader.ts` 支持从 `kilo.jsonc`/`kilo.json`/`config.json` 读取 agent 模型 ID 列表，JSONC 解析器支持注释和尾逗号
+- **技能注入系统**: `KiloCodeChatRuntime` 在每次发送消息前自动加载 vault `.kilo/skills/` 中的技能（包含 `kilocode-core` 核心技能和专业技能），拼接到消息前作为系统上下文，并附加 `QUESTION_PROTOCOL` 协议提示（`SkillLoader.ts`, `SkillCatalog.ts`, `SkillWatcher.ts`, `prompts.ts`）
+- **EventBuffer 事件缓冲**: 流式事件环形缓冲（最多 500 条），支持二分查找 `getSince()`、`replay()` 回放、`clear()` 清理。用于跨标签页切换时恢复流式渲染状态（`EventBuffer.ts`）
+- **多 Runtime 架构**: 每个 Tab 独立持有 `ChatRuntime` 实例，`Tab.runtime` 字段代替全局 `InputController`。`TabManager.disposeAllRuntimes()` 统一清理。标签关闭时自动 stop 对应进程（`Tab.ts`, `TabManager.ts`）
+- **后台预热**: `warmupRuntime()` 在视图打开时异步预启动 CLI 进程（仅二进制已缓存时），加速首次发送消息的响应速度
+- **EventBuffer 恢复**: 切换到有缓冲事件的标签时，自动从 runtime 的 `eventBuffer.replay()` 重建流式渲染内容
+- **空闲超时**: `idleTimeoutSeconds` 设置项（默认 600s=10 分钟），消息流结束后启动定时器，超时自动 stop serve 进程节省资源。Settings UI 提供滑块配置（`KiloCodeChatRuntime.ts`）
+- **HTTP Keep-Alive**: `KiloCodeChatRuntime` 使用 `http.Agent({ keepAlive: true })` 复用连接，减少每次消息的 TCP 握手开销
+- **自动审查 (Auto Review)**: AI 回复完成后，检测修改的文件，用独立 CLI 进程启动只读审查。审查通过返回 `LGTM`，发现问题弹出 Notice。Settings UI 提供开关（`ReviewLoop.ts`, `KiloCodeView.ts`）
+- **技能安装系统**: `SkillCatalog.installSkill()` 将内置技能模板写入 vault `.kilo/skills/{name}/SKILL.md`，`isSkillInstalled()` 检查安装状态
+- **i18n 条目**: 新增 en/zh 中 @mention 相关的翻译键
+
+### Changed
+
+- **KiloCodeView 架构重构**:
+  - 移除 `InputController`，改为 Tab 持有 runtime
+  - `getOrCreateRuntime()` 优先检查 activeTab.runtime，再检查 `plugin.warmupRuntimeRef`
+  - `restartRuntime()` 改为 stop 当前进程 → 置空 tab.runtime → 下一次发送自动重新创建
+  - `handleCancel()` 直接调用 `activeTab.runtime.cancel()`
+  - `handleModelSwitch()` 使用 `this.app` 的 Modal 基类代替动态导入
+- **TabManager**: `closeTab()` 改为异步 `Promise<boolean>`，关闭前先 dispose 对应的 runtime
+- **KiloCodeChatRuntime**:
+  - 所有 yield chunk 改通过 `emit()` 方法写入 EventBuffer
+  - `sendMessage()` 自动注入技能上下文和 `QUESTION_PROTOCOL`
+  - `stop()` 清理 idleTimer、EventBuffer、httpAgent
+  - 新增 `KiloCodeTiming` 日志输出 prompt 延迟
+
+### Fixed
+
+- **跨标签切换流式丢失**: EventBuffer 恢复机制在切换标签时重建流式渲染内容
+- **运行时泄露**: 标签关闭时未清理对应 CLI 进程，现通过 `Tab.disposeRuntime()` 确保 stop
+- **CLI 进程残留**: `onClose()` 调用 `tabManager.disposeAllRuntimes()` 统一清理所有标签进程
+
+### Docs
+
+- **设计文档**: 新增 `docs/superpowers/specs/2026-05-26-mention-design.md` 和 `2026-05-26-command-submenu-design.md`
+
 ## [0.8.0] - 2026-05-26
+
+### Added
+
+- **@mention 功能**: 将骨架代码 MentionService + MentionDropdown 真正接入聊天界面。工具栏 @ 按钮和输入框 `@` 字符都可触发搜索下拉，支持文件/文件夹（递归）/MCP Server/Subagent 搜索，前缀匹配优先（无结果回退子串匹配），键盘导航（↑↓EnterEsc），i18n 多语言，CSS 样式渲染。单元测试覆盖 @Parser（13 用例）和 MentionService（15 用例），全量测试无回归。
 
 ### Fixed
 
@@ -28,6 +116,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **文件附件功能**: 新增 `FileAttachmentContext`（`src/features/chat/ui/FileAttachmentContext.ts`），支持通过系统文件选择器附加任意文件（文本文件内容随消息发送给 AI，二进制文件仅标注文件名）。输入区域显示文件预览芯片（名称+大小+删除按钮）。工具栏 "Attach vault file" 按钮图标从占位符 `??` 修复为 📎；"Attach image" 修复为 🖼️；"Current note" 修复为 📝
 - **模型选择支持**: `ChatRuntime` 接口新增 `setModel()` / `getModel()` 方法
 - **依赖**: 新增 `@kilocode/sdk: ^7.3.1`
 - **ARCHITECTURE.md / DEVELOPMENT.md / ROADMAP.md**: 新增架构、开发指南和路线图文档

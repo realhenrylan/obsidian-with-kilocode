@@ -8,7 +8,7 @@ export const KILOCODE_CAPABILITIES: ProviderCapabilities = {
   supportsPlanMode: true,
   supportsRewind: true,
   supportsFork: true,
-  supportsImageAttachments: true,
+  supportsImageAttachments: false,
   supportsMcpTools: true,
   reasoningControl: 'effort',
 };

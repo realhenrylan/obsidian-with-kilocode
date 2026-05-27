@@ -1,9 +1,10 @@
 // src/main.ts
 
-import { Plugin, FileSystemAdapter } from 'obsidian';
+import { Plugin, FileSystemAdapter, Notice } from 'obsidian';
 import * as path from 'path';
 import { VIEW_TYPE_KILOCODE } from './core/types';
 import type { KiloCodeSettings } from './core/types';
+import type { ChatRuntime } from './core/providers/types';
 import { KiloCodeView } from './features/chat/KiloCodeView';
 import { DEFAULT_SETTINGS } from './app/settings/defaultSettings';
 import { ProviderRegistry } from './core/providers/ProviderRegistry';
@@ -11,10 +12,59 @@ import { createKilocodeRegistration } from './providers/kilocode/registration';
 import { BinaryManager } from './core/binary/BinaryManager';
 import { KiloCodeSettingTab } from './features/settings/SettingsTab';
 import { readCliConfig, mergeCliConfigIntoSettings } from './core/cliConfigReader';
+import { createSkillWatcher, type SkillWatcher } from './providers/kilocode/runtime/SkillWatcher';
+import { listCatalog, installSkill } from './providers/kilocode/runtime/SkillCatalog';
 
 export default class KiloCodePlugin extends Plugin {
   settings: KiloCodeSettings = DEFAULT_SETTINGS;
   binaryManager!: BinaryManager;
+  private kilocodeRuntimes: Set<ChatRuntime> = new Set();
+  warmupRuntimeRef: ChatRuntime | null = null;
+  private warmupTimer: ReturnType<typeof setTimeout> | null = null;
+  private skillWatcher: SkillWatcher | null = null;
+  private exitHandlerRegistered = false;
+
+  private registerExitHandler(): void {
+    if (this.exitHandlerRegistered) return;
+    this.exitHandlerRegistered = true;
+    const runtimes = this.kilocodeRuntimes;
+    const getWarmup = () => this.warmupRuntimeRef;
+    process.on('exit', () => {
+      for (const rt of runtimes) {
+        rt.killSync?.();
+      }
+      const warmup = getWarmup();
+      if (warmup) {
+        warmup.killSync?.();
+      }
+    });
+  }
+
+  addKilocodeRuntime(runtime: ChatRuntime): void {
+    this.kilocodeRuntimes.add(runtime);
+  }
+
+  private scheduleWarmup(): void {
+    if (!this.settings.autoStart) return;
+
+    this.warmupTimer = setTimeout(() => {
+      this.warmupTimer = null;
+      this.doWarmup();
+    }, 1000);
+  }
+
+  private async doWarmup(): Promise<void> {
+    try {
+      const registration = ProviderRegistry.get('kilocode');
+      if (!registration) return;
+
+      const runtime = registration.createRuntime();
+      await runtime.start();
+      this.warmupRuntimeRef = runtime;
+    } catch (err) {
+      console.warn('[KiloCode] Early warmup failed (will retry when view opens):', err);
+    }
+  }
 
   async onload() {
     await this.loadSettings();
@@ -60,12 +110,83 @@ export default class KiloCodePlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: 'list-skills',
+      name: 'List available skills',
+      callback: () => {
+        const catalog = listCatalog();
+        const skillList = catalog.map(s => `- ${s.name}: ${s.summary}`).join('\n');
+        new Notice(`Available skills:\n${skillList}`, 8000);
+      },
+    });
+
+    this.addCommand({
+      id: 'install-skill',
+      name: 'Install skill...',
+      callback: () => {
+        const catalog = listCatalog();
+        const names = catalog.map(s => s.name);
+        const adapter = this.app.vault.adapter;
+        const vaultPath = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : '';
+        if (!vaultPath) {
+          new Notice('Cannot determine vault path');
+          return;
+        }
+        new Notice(`Available skills: ${names.join(', ')}\nUse the "Install skill: <name>" command`, 8000);
+      },
+    });
+
+    const catalog = listCatalog();
+    for (const skill of catalog) {
+      this.addCommand({
+        id: `install-skill-${skill.name}`,
+        name: `Install skill: ${skill.name}`,
+        callback: () => {
+          const adapter = this.app.vault.adapter;
+          const vaultPath = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : '';
+          if (!vaultPath) {
+            new Notice('Cannot determine vault path');
+            return;
+          }
+          const result = installSkill(vaultPath, skill.name);
+          new Notice(result.message, 6000);
+        },
+      });
+    }
+
     // 添加设置面板
     this.addSettingTab(new KiloCodeSettingTab(this.app, this));
+
+    // 后台预热 CLI（autoStart=true 时有效）
+    this.scheduleWarmup();
+
+    // 启动技能文件热重载监听器
+    this.skillWatcher = createSkillWatcher(vaultPath);
+
+    // 注册同步退出清理，防止 Obsidian 关闭后子进程残留
+    this.registerExitHandler();
   }
 
   onunload() {
-    // 清理资源：flush 由 KiloCodeView.onClose() 处理
+    for (const rt of this.kilocodeRuntimes) {
+      rt.killSync?.();
+    }
+    this.kilocodeRuntimes.clear();
+
+    if (this.warmupTimer) {
+      clearTimeout(this.warmupTimer);
+      this.warmupTimer = null;
+    }
+
+    if (this.warmupRuntimeRef) {
+      this.warmupRuntimeRef.killSync?.();
+      this.warmupRuntimeRef = null;
+    }
+
+    if (this.skillWatcher) {
+      this.skillWatcher.dispose();
+      this.skillWatcher = null;
+    }
   }
 
   async loadSettings() {

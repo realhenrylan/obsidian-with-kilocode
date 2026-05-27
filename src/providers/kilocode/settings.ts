@@ -22,6 +22,7 @@ export const DEFAULT_KILOCODE_SETTINGS: KiloCodeSettings = {
   mirrorUrl: '',
   idleTimeoutSeconds: 600,
   autoReview: false,
+  customInstructions: '',
 };
 
 export function getKiloCodeSettings(settings: Record<string, unknown>): KiloCodeSettings {

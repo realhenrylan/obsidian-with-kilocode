@@ -22,4 +22,5 @@ export const DEFAULT_SETTINGS: KiloCodeSettings = {
   mirrorUrl: '',
   idleTimeoutSeconds: 600,
   autoReview: false,
+  customInstructions: '',
 };

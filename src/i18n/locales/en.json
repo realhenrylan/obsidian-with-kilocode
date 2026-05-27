@@ -41,6 +41,8 @@
     "files": "Files",
     "folders": "Folders",
     "tags": "Tags",
+    "mcpServers": "MCP Servers",
+    "subagents": "Subagents",
     "noResults": "No results found"
   },
   "settings": {

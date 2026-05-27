@@ -1,3 +1,6 @@
+import { Notice } from 'obsidian';
+import { listCatalog } from '../../providers/kilocode/runtime/SkillCatalog';
+
 /**
  * 斜杠命令定义
  */
@@ -6,7 +9,7 @@ export interface SlashCommand {
   name: string;
   description: string;
   icon: string;
-  handler: (args: string) => Promise<void>;
+  handler: (args: string) => Promise<string | void>;
 }
 
 /**
@@ -15,22 +18,18 @@ export interface SlashCommand {
 export class CommandRegistry {
   private commands: Map<string, SlashCommand> = new Map();
 
-  /** 注册命令 */
   register(command: SlashCommand): void {
     this.commands.set(command.id, command);
   }
 
-  /** 获取命令 */
   get(id: string): SlashCommand | undefined {
     return this.commands.get(id);
   }
 
-  /** 获取所有命令 */
   getAll(): SlashCommand[] {
     return Array.from(this.commands.values());
   }
 
-  /** 搜索命令 */
   search(query: string): SlashCommand[] {
     const lowerQuery = query.toLowerCase();
     return this.getAll().filter(cmd =>
@@ -40,7 +39,6 @@ export class CommandRegistry {
   }
 }
 
-/** 创建默认命令注册表 */
 export function createDefaultCommandRegistry(): CommandRegistry {
   const registry = new CommandRegistry();
 
@@ -48,9 +46,9 @@ export function createDefaultCommandRegistry(): CommandRegistry {
     id: 'compact',
     name: '/compact',
     description: 'Compact conversation history',
-    icon: '📦',
+    icon: '\uD83D\uDCE6',
     handler: async () => {
-      // TODO: 实现压缩逻辑
+      return 'Please compact the conversation history, keeping only the key context.';
     },
   });
 
@@ -58,29 +56,74 @@ export function createDefaultCommandRegistry(): CommandRegistry {
     id: 'clear',
     name: '/clear',
     description: 'Clear current conversation',
-    icon: '🗑️',
+    icon: '\uD83D\uDDD1\uFE0F',
     handler: async () => {
-      // TODO: 实现清空逻辑
+      return '/clear';
     },
   });
 
   registry.register({
     id: 'model',
-    name: '/model',
-    description: 'Switch AI model',
-    icon: '🤖',
-    handler: async () => {
-      // TODO: 实现模型切换
+    name: '/model <name>',
+    description: 'Switch AI model (e.g. /model claude-sonnet-4)',
+    icon: '\uD83E\uDD16',
+    handler: async (args: string) => {
+      if (!args.trim()) {
+        new Notice('Usage: /model <model-id> (e.g. /model claude-sonnet-4)');
+        return;
+      }
+      return `/model ${args.trim()}`;
     },
   });
 
   registry.register({
     id: 'mode',
-    name: '/mode',
+    name: '/mode <plan|code|ask>',
     description: 'Switch mode (plan/code/ask)',
-    icon: '🔄',
+    icon: '\uD83D\uDD04',
+    handler: async (args: string) => {
+      const mode = args.trim().toLowerCase();
+      if (!['plan', 'code', 'ask'].includes(mode)) {
+        new Notice('Usage: /mode plan | /mode code | /mode ask');
+        return;
+      }
+      return `/mode ${mode}`;
+    },
+  });
+
+  registry.register({
+    id: 'skills',
+    name: '/skills',
+    description: 'List available skills',
+    icon: '\uD83C\uDF93',
     handler: async () => {
-      // TODO: 实现模式切换
+      const catalog = listCatalog();
+      const skillList = catalog.map(s => `- ${s.name}: ${s.summary}`).join('\n');
+      new Notice(`Available skills:\n${skillList}`, 8000);
+      return 'List available skills';
+    },
+  });
+
+  registry.register({
+    id: 'skill',
+    name: '/skill <name>',
+    description: 'Load a skill into context (e.g. /skill frontmatter)',
+    icon: '\uD83C\uDF93',
+    handler: async (args: string) => {
+      const name = args.trim();
+      if (!name) {
+        const catalog = listCatalog();
+        const list = catalog.map(s => s.name).join(', ');
+        new Notice(`Usage: /skill <name>. Available: ${list}`, 6000);
+        return;
+      }
+      const catalog = listCatalog();
+      const skill = catalog.find(s => s.name === name);
+      if (!skill) {
+        new Notice(`Unknown skill: "${name}". Use /skills to list available.`);
+        return;
+      }
+      return `[Activate skill: ${name}]\n${skill.description}\n\nFollow the instructions of this skill carefully.`;
     },
   });
 

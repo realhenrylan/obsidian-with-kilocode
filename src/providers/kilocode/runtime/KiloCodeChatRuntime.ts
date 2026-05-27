@@ -157,6 +157,20 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.httpAgent.destroy();
   }
 
+  /** 同步强制终止 CLI 进程（用于 process.on('exit') 兜底清理） */
+  killSync(): void {
+    this.clearIdleTimer();
+    this.abortController?.abort();
+    if (this.serverHandle) {
+      try { this.serverHandle.close(); } catch {}
+    }
+    this.client = null;
+    this.serverHandle = null;
+    this.sessionId = null;
+    this.eventBuffer.clear();
+    this.httpAgent.destroy();
+  }
+
   setModel(modelId: string): void {
     this.pendingModel = modelId;
   }
@@ -209,11 +223,17 @@ export class KiloCodeChatRuntime implements ChatRuntime {
 
       const t0 = performance.now();
       const skillsContext = await this.buildSkillsContent(context?.vaultPath);
-      const enhancedContent = skillsContext ? skillsContext + '\n\n' + content : content;
+      let enhancedContent = skillsContext ? skillsContext + '\n\n' + content : content;
+      if (context?.customInstructions) {
+        enhancedContent += `\n\n[User Custom Instructions]\n${context.customInstructions}`;
+      }
 
       const promptResult = await (this.client.session as any).prompt({
         path: { id: this.sessionId },
-        body: { agent: DEFAULT_AGENT, parts: [{ type: 'text', text: enhancedContent }] },
+        body: {
+          agent: DEFAULT_AGENT,
+          parts: [{ type: 'text', text: enhancedContent }],
+        },
         signal,
       });
       if (promptResult.error) {
@@ -227,11 +247,11 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       if (promptResult.data?.parts) {
         const parts = promptResult.data.parts;
         if (Array.isArray(parts)) {
-          for (const part of parts) {
-            if (signal.aborted) break;
-            const chunk = this.parsePart(part);
-            if (chunk) yield this.emit(chunk);
-          }
+      for (const part of parts) {
+        if (signal.aborted) break;
+        const chunk = this.parsePart(part);
+        if (chunk) yield this.emit(chunk);
+      }
         }
       }
       yield this.emit({ type: 'done' });

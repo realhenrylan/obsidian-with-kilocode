@@ -21,6 +21,8 @@ export interface ChatRuntime {
   start(): Promise<void>;
   /** 停止 CLI 进程 */
   stop(): Promise<void>;
+  /** 同步强制终止 CLI 进程（用于 process.on('exit') 兜底清理） */
+  killSync?(): void;
   /** 发送消息，返回 AsyncGenerator 消费流式响应 */
   sendMessage(content: string, context?: MessageContext): AsyncGenerator<StreamChunk>;
   /** 取消当前流式响应 */
@@ -42,6 +44,8 @@ export interface MessageContext {
   vaultPath?: string;
   currentNote?: string;
   externalContexts?: string[];
+  /** 用户自定义指令，由 # 按钮编辑器设置 */
+  customInstructions?: string;
 }
 
 /** Provider 注册信息 */
