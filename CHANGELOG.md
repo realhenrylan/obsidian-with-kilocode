@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.9.3] - 2026-05-27
 
+### Added
+
+- **versions.json**: 版本映射文件，为提交 Obsidian 社区插件商城做准备
+- manifest.json 版本号更新至 0.9.3
+
 ### Changed
 
 - **README 产品定位重构**: Hero 定位从"你的 Obsidian 知识库就是上下文"改为"An Obsidian plugin that turns your vault into persistent memory for KiloCode"。新增"问题 (The Problem)"、"什么是记忆系统"、"变化对比 (Before/After)"三个章节，将产品叙事从"双向桥梁/聊天面板"升级为"KiloCode 的长期记忆系统"

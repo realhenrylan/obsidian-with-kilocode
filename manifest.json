@@ -1,7 +1,7 @@
 {
   "id": "kilocode",
   "name": "KiloCode",
-  "version": "0.8.0",
+  "version": "0.9.3",
   "minAppVersion": "1.7.2",
   "description": "Give KiloCode persistent project memory from your Obsidian vault. Architecture decisions, skills, workflows, and sessions — all stored in your vault.",
   "author": "Henry Lan",
