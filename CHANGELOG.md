@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.9.4] - 2026-05-29
+
+### Fixed
+
+- **manifest.json**: 移除 description 中的 "Obsidian" 字样（Obisidan 商城审核要求）
+- **LICENSE**: 移除 MIT 许可证模板中的非标准灵感来源声明（修复自动化许可证识别）
+
 ## [0.9.3] - 2026-05-27
 
 ### Added
