@@ -10,13 +10,12 @@
 <h1 align="center">KiloCode for Obsidian</h1>
 
 <p align="center">
-  <strong>An Obsidian plugin that turns your vault into persistent memory for KiloCode.</strong>
+  <strong>My Obsidian knowledge base, managed with KiloCode.</strong>
 </p>
 
 <p align="center">
-  Stop losing context every time the conversation resets.<br />
-  Your KiloCode agent remembers architecture decisions, project context,<br />
-  reusable workflows, coding standards, and previous sessions — from your vault.
+  I have a knowledge base (Obsidian), I have an AI tool (KiloCode).<br />
+  This plugin bridges them.
 </p>
 
 <p align="center">
@@ -31,28 +30,27 @@
 
 ## The Problem
 
-KiloCode is powerful. But like every AI coding agent, it has a fundamental flaw:
+Managing an Obsidian knowledge base is hard. As notes pile up:
 
-**It forgets everything between sessions.**
+- Notes become disconnected — knowledge silos grow
+- Tags drift — the same concept ends up under different labels
+- Weekly review becomes a chore — journals pile up without curation
+- Knowledge accrual is manual — writing takes effort, organizing takes even more
 
-Every conversation reset means:
-- Lost architecture context — you re-explain the same decisions
-- Forgotten coding standards — the agent repeats the same mistakes
-- Inconsistent workflows — no two sessions produce the same result
-- Repeated prompting — you type the same instructions again and again
+I already use KiloCode CLI for coding. Now the same tool can help me manage my knowledge in Obsidian.
 
-This plugin is the fix: **your Obsidian vault becomes KiloCode's long-term memory.**
+**This plugin bridges my knowledge base with my AI tool.**
 
 ---
 
 ## What This Plugin Does
 
-KiloCode for Obsidian is a bidirectional bridge between your knowledge base (Obsidian vault) and the KiloCode CLI. The vault doesn't just store notes — it stores memory for your coding agent.
+KiloCode for Obsidian is a bidirectional bridge between your knowledge base (Obsidian vault) and the KiloCode CLI. KiloCode is your AI tool — it helps you code in the terminal, and now it helps you manage knowledge in Obsidian. Zero config: same tool, two scenarios.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                     Obsidian Vault                            │
-│               (Persistent Memory Layer)                       │
+│                  (My Knowledge Base)                          │
 │                                                               │
 │  ┌──────────┐  ┌──────────────┐  ┌───────────────────────┐   │
 │  │ Notes    │  │ .kilo/skills/ │  │ .kilocode/sessions/   │   │
@@ -86,12 +84,11 @@ KiloCode for Obsidian is a bidirectional bridge between your knowledge base (Obs
             └─────────────────────────┘
 ```
 
-### What makes it a memory system, not just a chat panel?
+### What makes it interesting?
 
-- **Persistent project memory**: Architecture decisions, coding standards, and project knowledge live in your vault as markdown. KiloCode reads them as context — every session, every message. No context is ever lost.
-- **Skills stored in your vault**: AI skill definitions live at `.kilo/skills/` as `.md` files. Edit a skill, and KiloCode's behavior changes instantly. No config toggling, no CLI restarts.
-- **Session history in your vault**: Every conversation persists to `.kilocode/sessions/` — version-controlled, backed up with your notes, searchable across sessions.
-- **Reference anything with @**: Type `@` to search and reference vault files, folders, MCP servers, or subagents. Content flows from your memory into the conversation seamlessly.
+- **Knowledge in the vault, shared tooling**: Notes, skill definitions, and conversation history all live in your vault — version-controlled, backed up. KiloCode reads them as context — every session, every message. Same KiloCode config for coding and knowledge management, zero extra setup.
+- **Skills are knowledge workflows**: AI skill definitions live at `.kilo/skills/` as `.md` files. Write a weekly review workflow in markdown → run it every week with one `/skill weekly-review` command. Edit a skill, and the behavior changes instantly. No config toggling, no CLI restarts.
+- **Reference anything with @**: Type `@` to search and reference vault files, folders, MCP servers, or subagents. Content flows from your notes into the conversation seamlessly.
 - **One-click note context**: Toggle "Include current note" and the active note's full content is sent to the AI as context — no copy-paste.
 - **File attachments**: Drag, paste, or click to attach files. Text files are read inline and sent to the AI.
 - **MCP servers configured in the vault**: `.kilocode/mcp.json` defines tools the AI can use. Edit this file to give KiloCode new capabilities.
@@ -104,43 +101,51 @@ KiloCode for Obsidian is a bidirectional bridge between your knowledge base (Obs
 
 ### Before
 
-KiloCode forgets everything when the conversation ends:
-- Architecture decisions are lost
-- Workflows reset every session
-- Coding standards must be re-explained
-- Reusable patterns never accumulate
+Managing the knowledge base is entirely manual:
+- Notes are written and rarely revisited
+- Tagging conventions drift over time
+- Weekly reviews require manual effort and separate notes
+- Knowledge silos go unnoticed
 
 ### After
 
-Your Obsidian vault becomes KiloCode's persistent memory:
-- Architecture is always loaded as context
-- Skills are always available (markdown files in vault)
-- Previous sessions are searchable and reusable
-- Project knowledge accumulates over time
+KiloCode becomes your knowledge management assistant:
+- Workflows for knowledge processing live in the vault as reusable skills
+- Previous sessions are searchable and replayable
+- Weekly review runs with one command
+- Knowledge accumulates and gets organized over time
 
 ---
 
-## Documentation
+## KiloCode's Toolbox × My Knowledge Management
 
-| Document | Audience | Contents |
-|----------|----------|----------|
-| **[ARCHITECTURE.md](ARCHITECTURE.md)** | Contributors | Directory structure, data flow, key components, design decisions, security model |
-| **[DEVELOPMENT.md](DEVELOPMENT.md)** | Developers | Setup, build/test/lint scripts, i18n guide, CI/CD pipeline |
-| **[ROADMAP.md](ROADMAP.md)** | Everyone | Current progress and planned features |
-| **[CHANGELOG.md](CHANGELOG.md)** | Everyone | Version history and release notes |
+KiloCode is a versatile toolkit. Here's how each tool helps manage your knowledge base:
+
+| KiloCode Tool | I use it to... | Example |
+|---------------|---------------|---------|
+| **Skill System** | Write reusable knowledge workflows | Write a `weekly-review.md` skill: auto-scan this week's journals → extract key decisions → generate a weekly summary. Write once, run `/skill weekly-review` every Friday |
+| **Bash / Scripting** | Batch-operate on notes | "Find all untagged notes in my vault and auto-tag them based on content" — one instruction, done |
+| **File Read/Write** | Generate knowledge indexes and maps | "Scan all ML-related notes in the vault, generate a knowledge map page with backlinks" |
+| **MCP Tools** | Import knowledge from external sources | Connect Brave Search → "Search for latest AI Agent developments this week, write into literature notes" |
+| **Plan Mode** | Safely analyze the full vault | "Analyze my vault structure, find knowledge silos and tagging inconsistencies" — read-only, confirm before execution |
+| **Permission Control** | Trust but verify | Plan mode for analysis, Normal mode for execution. Never Yolo — data safety first |
+| **Multi-Tab Chat** | Handle parallel knowledge tasks | Tab 1 researching connections, Tab 2 writing weekly report, Tab 3 organizing tags |
+| **Fork/Rewind** | Roll back unsatisfactory changes | "Not happy with the tag organization → Rewind → adjust → re-run" |
+| **Session Persistence** | Never lose knowledge work progress | Every organization session auto-saves — open next week and see exactly where you left off |
+| **Zero Config** | Open and use | Already using KiloCode in the terminal? Same config, zero extra setup in Obsidian |
 
 ---
 
 ## Features
 
-| Feature | How it builds memory |
-|---------|---------------------|
+| Feature | Capability |
+|---------|-----------|
 | **AI Chat Sidebar** | Chat with KiloCode AI in Obsidian's sidebar. Each message carries your vault path, active note, and installed skills as context — the AI knows your vault. |
 | **@mention Vault Files** | Type `@` to search and reference any vault file or folder. The content flows from your notes into the conversation — no copy-paste. |
 | **Custom Instructions** | Click `#` to open an instruction editor — write custom system prompts that get injected into the current conversation. Auto-saved, applied per session. |
 | **File Attachments** | Attach any file from your system via the toolbar button. Text files are read inline and sent to the AI conversation. |
 | **Current Note Context** | One-click toggle to include the active note as AI context. The plugin reads the note via Obsidian's Vault API and passes it to the CLI. |
-| **Vault-Backed Skill System** | AI skills are `.md` files in `.kilo/skills/` inside your vault. The plugin loads them automatically and injects them as system context for every message. Edit a skill → AI behavior changes. No CLI restart needed. |
+| **Vault-Backed Skill System** | Knowledge processing skills are `.md` files in `.kilo/skills/` inside your vault. The plugin loads them automatically and injects them as system context for every message. Edit a skill → behavior changes. No CLI restart needed. |
 | **Slash Commands** | `/skill` to activate skills from the catalog, `/model` to switch AI models on the fly, `/mode` to toggle code/plan/ask, `/compact` to summarize conversation history, `/clear` to start fresh. |
 | **MCP Tool Framework** | Tools are defined in `.kilocode/mcp.json` inside your vault. The plugin lists available MCP servers in the @mention dropdown so you can reference them in chat. |
 | **Plan Mode** | Three modes: code (full read/write), plan (read-only analysis), ask (Q&A only). The mode prefix is injected into every message sent to the CLI. |
@@ -152,6 +157,17 @@ Your Obsidian vault becomes KiloCode's persistent memory:
 | **CLI Auto-Download** | No manual CLI install. The BinaryManager auto-detects, downloads, and caches the platform-appropriate KiloCode binary from npm on first use. Background warmup pre-starts the CLI process so your first message is fast. |
 | **CLI Config Aware** | Already using KiloCode CLI in your terminal? The plugin reads `~/.config/kilo/kilo.jsonc` directly — your API keys, model selections, and agent settings carry over automatically. The `/model` command lists models from your CLI config. Configure once, use everywhere. |
 | **Idle Timeout** | After 10 minutes of inactivity, the CLI process auto-stops to save resources. Next message restarts it transparently. HTTP keep-alive is used to reduce connection overhead. |
+
+---
+
+## Documentation
+
+| Document | Audience | Contents |
+|----------|----------|----------|
+| **[ARCHITECTURE.md](ARCHITECTURE.md)** | Contributors | Directory structure, data flow, key components, design decisions, security model |
+| **[DEVELOPMENT.md](DEVELOPMENT.md)** | Developers | Setup, build/test/lint scripts, i18n guide, CI/CD pipeline |
+| **[ROADMAP.md](ROADMAP.md)** | Everyone | Current progress and planned features |
+| **[CHANGELOG.md](CHANGELOG.md)** | Everyone | Version history and release notes |
 
 ---
 
