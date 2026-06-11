@@ -1,4 +1,3 @@
-import * as os from 'os';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 
@@ -27,10 +26,10 @@ const ARCH_MAP: Record<string, 'x64' | 'arm64'> = {
  * x64 架构下，无 AVX2 的 CPU 需要使用 baseline 变体。
  */
 export function supportsAvx2(): boolean {
-  const arch = ARCH_MAP[os.arch()];
+  const arch = ARCH_MAP[process.arch];
   if (arch !== 'x64') return false;
 
-  const platform = PLATFORM_MAP[os.platform()];
+  const platform = PLATFORM_MAP[process.platform];
   if (platform === 'linux') {
     try {
       return /(^|\s)avx2(\s|$)/i.test(fs.readFileSync('/proc/cpuinfo', 'utf8'));
@@ -74,7 +73,7 @@ export function supportsAvx2(): boolean {
  * 检测 Linux 系统是否使用 musl libc（如 Alpine Linux）。
  */
 export function isMusl(): boolean {
-  if (os.platform() !== 'linux') return false;
+  if (process.platform !== 'linux') return false;
 
   try {
     if (fs.existsSync('/etc/alpine-release')) return true;
@@ -98,11 +97,11 @@ export function isMusl(): boolean {
  * 逻辑与 @kilocode/cli 的 bin/kilo 脚本完全一致。
  */
 export function detectPlatform(): PlatformInfo {
-  const platform = PLATFORM_MAP[os.platform()];
-  const arch = ARCH_MAP[os.arch()];
+  const platform = PLATFORM_MAP[process.platform];
+  const arch = ARCH_MAP[process.arch];
 
   if (!platform || !arch) {
-    throw new Error(`Unsupported platform: ${os.platform()}-${os.arch()}`);
+    throw new Error(`Unsupported platform: ${process.platform}-${process.arch}`);
   }
 
   const binaryName = platform === 'windows' ? 'kilo.exe' : 'kilo';

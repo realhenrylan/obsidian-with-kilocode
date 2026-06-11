@@ -4,7 +4,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import type { KiloCodeSettings } from './types';
 
 /**
@@ -39,7 +38,7 @@ function getConfigDir(): string {
     const appDataPath = path.join(process.env.APPDATA, 'kilo');
     if (fs.existsSync(appDataPath)) return appDataPath;
   }
-  const homeDir = os.homedir();
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
   return path.join(homeDir, '.config', 'kilo');
 }
 

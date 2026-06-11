@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.9.5] - 2026-06-11
+
+### Security
+
+- **Release Attestation**: 为 `main.js` / `styles.css` 添加 GitHub Artifact Attestation 签名，满足 Obsidian 商城审核要求
+- **移除 `os` 模块依赖**：`PlatformDetector.ts` / `cliConfigReader.ts` 不再 import `os` 模块，消除"系统身份信息读取"警告（`os.arch()` → `process.arch`，`os.platform()` → `process.platform`，`os.homedir()` → env vars）
+
 ## [0.9.4] - 2026-05-29
 
 ### Fixed
