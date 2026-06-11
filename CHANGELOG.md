@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.9.6] - 2026-06-11
+
+### Fixed
+
+- **CI 类型错误**: `cliConfigReader.ts` 中 `unknown` 转 `string | undefined` 断言；`types.ts` re-export `Message`；`MarkdownRenderer.render` 补全 5 参数签名；`VirtualScroller` 回调显式 `Message` 类型；测试 mock 同步更新
+
 ## [0.9.5] - 2026-06-11
 
 ### Security
