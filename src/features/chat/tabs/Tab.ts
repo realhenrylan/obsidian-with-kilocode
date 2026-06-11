@@ -60,8 +60,7 @@ export class Tab {
     if (this.runtime) {
       try {
         await this.runtime.stop();
-      } catch {
-      }
+      } catch { /* ignore: runtime already stopped */ }
       this.runtime = null;
     }
   }

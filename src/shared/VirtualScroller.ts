@@ -5,18 +5,18 @@ export interface VirtualScrollerConfig {
   overscan: number;
 }
 
-export class VirtualScroller {
+export class VirtualScroller<T = unknown> {
   private container: HTMLElement;
   private contentEl: HTMLElement;
-  private items: any[] = [];
+  private items: T[] = [];
   private config: VirtualScrollerConfig;
-  private renderItem: (item: any, index: number) => HTMLElement;
+  private renderItem: (item: T, index: number) => HTMLElement;
   private visibleItems: Map<number, HTMLElement> = new Map();
 
   constructor(
     container: HTMLElement,
     config: VirtualScrollerConfig,
-    renderItem: (item: any, index: number) => HTMLElement
+    renderItem: (item: T, index: number) => HTMLElement
   ) {
     this.container = container;
     this.config = config;
@@ -26,13 +26,13 @@ export class VirtualScroller {
     container.addEventListener('scroll', () => this.onScroll());
   }
 
-  setItems(items: any[]): void {
+  setItems(items: T[]): void {
     this.items = items;
     this.updateTotalHeight();
     this.renderVisibleItems();
   }
 
-  appendItem(item: any): void {
+  appendItem(item: T): void {
     this.items.push(item);
     this.updateTotalHeight();
     this.renderVisibleItems();
@@ -63,9 +63,11 @@ export class VirtualScroller {
     for (let i = startIndex; i < endIndex; i++) {
       if (!this.visibleItems.has(i)) {
         const el = this.renderItem(this.items[i], i);
-        el.style.position = 'absolute';
-        el.style.top = `${i * this.config.itemHeight}px`;
-        el.style.width = '100%';
+        el.setCssStyles({
+          position: 'absolute',
+          top: `${i * this.config.itemHeight}px`,
+          width: '100%',
+        });
         this.contentEl.appendChild(el);
         this.visibleItems.set(i, el);
       }
@@ -73,7 +75,7 @@ export class VirtualScroller {
   }
 
   private onScroll(): void {
-    requestAnimationFrame(() => this.renderVisibleItems());
+    window.requestAnimationFrame(() => this.renderVisibleItems());
   }
 
   scrollToBottom(): void {

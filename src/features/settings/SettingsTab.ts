@@ -20,10 +20,10 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.addClass('kilo-settings');
 
-    containerEl.createEl('h2', { text: 'KiloCode Settings' });
+    new Setting(containerEl).setName('KiloCode Settings').setHeading();
 
     // === CLI 配置状态 ===
-    containerEl.createEl('h3', { text: 'CLI Configuration' });
+    new Setting(containerEl).setName('CLI Configuration').setHeading();
     const cliConfig = readCliConfig();
     const configPath = getCliConfigPath();
     const hasApiKey = cliHasApiKey();
@@ -57,20 +57,21 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     }
 
     // API Configuration 区域下方的安全提示
+    const vaultConfigDir = this.app.vault.configDir;
     containerEl.createDiv({
       cls: 'kilo-setting-warning',
-      text: '⚠️ If you enter an API key below, it will be stored in the vault plugin data file (.obsidian/plugins/kilocode/data.json) and may be exposed if the vault is synced to cloud or Git. Prefer configuring the API key in kilo CLI config (~/.config/kilo/config.json) instead.',
+      text: `⚠️ If you enter an API key below, it will be stored in the vault plugin data file (${vaultConfigDir}/plugins/kilocode/data.json) and may be exposed if the vault is synced to cloud or Git. Prefer configuring the API key in kilo CLI config (~/.config/kilo/config.json) instead.`,
     });
 
     // === API 配置 ===
-    containerEl.createEl('h3', { text: 'API Configuration' });
+    new Setting(containerEl).setName('API Configuration').setHeading();
 
     new Setting(containerEl)
       .setName('API Key')
       .setDesc('Your AI provider API key (e.g. Anthropic, OpenAI)')
       .addText(text => {
         text.inputEl.type = 'password';
-        text.inputEl.style.width = '100%';
+        text.inputEl.setCssStyles({ width: '100%' });
         text
           .setPlaceholder('sk-...')
           .setValue(this.plugin.settings.apiKey)
@@ -99,7 +100,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     // === 常规设置 ===
-    containerEl.createEl('h3', { text: 'General' });
+    new Setting(containerEl).setName('General').setHeading();
 
     new Setting(containerEl)
       .setName('KiloCode CLI Path')
@@ -162,7 +163,6 @@ export class KiloCodeSettingTab extends PluginSettingTab {
       .addSlider(slider => slider
         .setLimits(0, 600, 10)
         .setValue(this.plugin.settings.idleTimeoutSeconds)
-        .setDynamicTooltip()
         .onChange(async (value) => {
           this.plugin.settings.idleTimeoutSeconds = value;
           await this.plugin.saveSettings();
@@ -179,7 +179,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     // === 聊天设置 ===
-    containerEl.createEl('h3', { text: 'Chat' });
+    new Setting(containerEl).setName('Chat').setHeading();
 
     new Setting(containerEl)
       .setName('Maximum Tabs')
@@ -187,7 +187,6 @@ export class KiloCodeSettingTab extends PluginSettingTab {
       .addSlider(slider => slider
         .setLimits(1, 10, 1)
         .setValue(this.plugin.settings.maxTabs)
-        .setDynamicTooltip()
         .onChange(async (value) => {
           this.plugin.settings.maxTabs = value;
           await this.plugin.saveSettings();
@@ -204,7 +203,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     // === 模型设置 ===
-    containerEl.createEl('h3', { text: 'Model' });
+    new Setting(containerEl).setName('Model').setHeading();
 
     new Setting(containerEl)
       .setName('Default Model')
@@ -226,14 +225,13 @@ export class KiloCodeSettingTab extends PluginSettingTab {
       .addSlider(slider => slider
         .setLimits(0, 1, 0.1)
         .setValue(this.plugin.settings.temperature)
-        .setDynamicTooltip()
         .onChange(async (value) => {
           this.plugin.settings.temperature = value;
           await this.plugin.saveSettings();
         }));
 
     // === 外观设置 ===
-    containerEl.createEl('h3', { text: 'Appearance' });
+    new Setting(containerEl).setName('Appearance').setHeading();
 
     new Setting(containerEl)
       .setName('Theme')
@@ -254,14 +252,13 @@ export class KiloCodeSettingTab extends PluginSettingTab {
       .addSlider(slider => slider
         .setLimits(12, 20, 1)
         .setValue(this.plugin.settings.fontSize)
-        .setDynamicTooltip()
         .onChange(async (value) => {
           this.plugin.settings.fontSize = value;
           await this.plugin.saveSettings();
         }));
 
     // === 安全设置 ===
-    containerEl.createEl('h3', { text: 'Security' });
+    new Setting(containerEl).setName('Security').setHeading();
 
     new Setting(containerEl)
       .setName('Permission Mode')

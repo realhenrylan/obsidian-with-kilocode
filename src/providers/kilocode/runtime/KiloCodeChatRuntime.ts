@@ -2,10 +2,11 @@
 import type { BinaryManager } from '../../../core/binary/BinaryManager';
 import type { KiloCodeSettings } from '../../../core/types';
 
-import { createKiloServer, type ServerOptions } from '@kilocode/sdk/server';
+import { createKiloServer } from '@kilocode/sdk/server';
 import { createKiloClient } from '@kilocode/sdk/client';
 import type { KiloClient } from '@kilocode/sdk/client';
 import * as http from 'http';
+import * as pathModule from 'path';
 import { EventBuffer } from './EventBuffer';
 import { loadSkills } from './SkillLoader';
 import { QUESTION_PROTOCOL } from './prompts';
@@ -145,10 +146,10 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     if (this.client && this.sessionId) {
       try {
         await (this.client.session as any).abort({ path: { id: this.sessionId } });
-      } catch {}
+      } catch { /* ignore: session already ended */ }
     }
     if (this.serverHandle) {
-      try { this.serverHandle.close(); } catch {}
+      try { this.serverHandle.close(); } catch { /* ignore: server already closed */ }
     }
     this.client = null;
     this.serverHandle = null;
@@ -162,7 +163,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.clearIdleTimer();
     this.abortController?.abort();
     if (this.serverHandle) {
-      try { this.serverHandle.close(); } catch {}
+      try { this.serverHandle.close(); } catch { /* ignore: server already closed */ }
     }
     this.client = null;
     this.serverHandle = null;
@@ -297,7 +298,6 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     if (!cliPath) {
       throw new Error('KiloCode CLI binary not found. Configure it in settings.');
     }
-    const pathModule = require('path');
     const binDir = pathModule.dirname(cliPath);
     const origPath = process.env.PATH || '';
     const pathSep = pathModule.delimiter;

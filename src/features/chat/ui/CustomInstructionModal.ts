@@ -34,8 +34,8 @@ export class CustomInstructionModal extends Modal {
     textarea.placeholder = 'e.g. Always use 2-space indentation.\nFollow the Single Responsibility Principle.\nWrite tests before implementation.';
 
     const autoResize = (): void => {
-      textarea.style.height = '0';
-      textarea.style.height = textarea.scrollHeight + 'px';
+      textarea.setCssStyles({ height: '0' });
+      textarea.setCssStyles({ height: textarea.scrollHeight + 'px' });
     };
 
     // auto-save + auto-resize on input
@@ -45,7 +45,7 @@ export class CustomInstructionModal extends Modal {
     });
 
     // initial resize
-    requestAnimationFrame(autoResize);
+    window.requestAnimationFrame(autoResize);
 
     // 提示
     contentEl.createEl('p', {

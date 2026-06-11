@@ -127,8 +127,7 @@ export class ImageContext {
       const img = imgEl.createEl('img', {
         attr: { src: this.images[i].data },
       });
-      img.style.maxWidth = '60px';
-      img.style.maxHeight = '60px';
+      img.setCssStyles({ maxWidth: '60px', maxHeight: '60px' });
 
       const removeBtn = imgEl.createEl('button', {
         cls: 'kilo-image-remove',

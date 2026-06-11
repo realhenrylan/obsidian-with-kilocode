@@ -50,7 +50,7 @@ export class MessageRenderer {
     if (!this.currentTextEl) return;
     this.currentTextContent += text;
     // 流式阶段用 textContent 直接显示，避免高频 Markdown 渲染
-    let streamingSpan = this.currentTextEl.querySelector('.kilo-streaming-text') as HTMLElement | null;
+    let streamingSpan: HTMLElement | null = this.currentTextEl.querySelector('.kilo-streaming-text');
     if (!streamingSpan) {
       streamingSpan = this.currentTextEl.createSpan({ cls: 'kilo-streaming-text' });
     }
@@ -108,10 +108,10 @@ export class MessageRenderer {
     this.currentTextContent = '';
 
     // 延迟到下一帧渲染 Markdown，让 UI 先更新流式完成状态
-    requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       if (textContent) {
         const markdownEl = textEl.createDiv({ cls: 'kilo-message-text' });
-        void MarkdownRenderer.renderMarkdown(
+        void MarkdownRenderer.render(
           textContent,
           markdownEl,
           '',
@@ -192,7 +192,7 @@ export class MessageRenderer {
       // 渲染文本内容
       if (message.content) {
         const textEl = contentEl.createDiv({ cls: 'kilo-message-text' });
-        void MarkdownRenderer.renderMarkdown(
+        void MarkdownRenderer.render(
           message.content,
           textEl,
           '',
@@ -369,7 +369,7 @@ export class MessageRenderer {
    */
   scrollToBottom(): void {
     if (this.scrollRafId !== null) return;
-    this.scrollRafId = requestAnimationFrame(() => {
+    this.scrollRafId = window.requestAnimationFrame(() => {
       this.scrollRafId = null;
       this.container.scrollTop = this.container.scrollHeight;
     });

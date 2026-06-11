@@ -9,7 +9,7 @@ export interface MCPServerConfig {
 export interface MCPTool {
   name: string;
   description: string;
-  inputSchema: any;
+  inputSchema: Record<string, unknown>;
 }
 
 export interface MCPServerInstance {
@@ -65,7 +65,7 @@ export class MCPManager {
     return tools;
   }
 
-  async callTool(serverId: string, toolName: string, args: any): Promise<any> {
+  async callTool(serverId: string, toolName: string, args: Record<string, unknown>): Promise<unknown> {
     const instance = this.servers.get(serverId);
     if (!instance || !instance.connected) {
       throw new Error(`MCP server ${serverId} not connected`);

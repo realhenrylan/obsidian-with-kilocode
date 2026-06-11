@@ -116,8 +116,8 @@ export class VaultFileBrowserModal extends Modal {
       const itemEl = listEl.createDiv({ cls: 'kilo-file-item' });
       const icon = file.extension === 'md' ? '\uD83D\uDCDD' : '\uD83D\uDCC4';
       itemEl.createSpan({ cls: 'kilo-file-item-icon', text: icon });
-      const nameEl = itemEl.createSpan({ cls: 'kilo-file-item-name', text: file.name });
-      const pathEl = itemEl.createSpan({ cls: 'kilo-file-item-path', text: file.path });
+      itemEl.createSpan({ cls: 'kilo-file-item-name', text: file.name });
+      itemEl.createSpan({ cls: 'kilo-file-item-path', text: file.path });
 
       itemEl.addEventListener('click', () => {
         this.onSelect({

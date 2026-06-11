@@ -139,7 +139,7 @@ export class FileAttachmentContext {
       const att = this.attachments[i];
       const chipEl = previewEl.createDiv({ cls: 'kilo-file-chip' });
 
-      const iconEl = chipEl.createSpan({ cls: 'kilo-file-chip-icon', text: '📎' });
+      chipEl.createSpan({ cls: 'kilo-file-chip-icon', text: '📎' });
       const infoEl = chipEl.createSpan({ cls: 'kilo-file-chip-info' });
 
       infoEl.createSpan({ cls: 'kilo-file-chip-name', text: att.name });

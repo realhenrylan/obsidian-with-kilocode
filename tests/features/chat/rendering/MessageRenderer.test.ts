@@ -12,7 +12,7 @@ jest.mock('obsidian', () => ({
   App: class {},
   Component: class {},
   MarkdownRenderer: {
-    renderMarkdown: jest.fn((content: string, el: HTMLElement) => {
+    render: jest.fn((content: string, el: HTMLElement) => {
       // 模拟 Obsidian 的代码块渲染：` ```lang\ncode\n``` → <pre><code class="language-lang">code</code></pre>  `
       const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
       let match;

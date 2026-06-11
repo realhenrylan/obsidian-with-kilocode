@@ -43,6 +43,14 @@ function polyfillObsidianDOM(): void {
       return this.createEl('span', attrs);
     };
   }
+
+  if (!proto.setCssStyles) {
+    proto.setCssStyles = function (styles: Record<string, string>): void {
+      for (const [key, val] of Object.entries(styles)) {
+        (this.style as any)[key] = val;
+      }
+    };
+  }
 }
 
 describe('ImageContext', () => {

@@ -1,3 +1,13 @@
+// Obsidian polyfills for HTMLElement
+if (typeof HTMLElement !== 'undefined') {
+  HTMLElement.prototype.setCssStyles = function (this: HTMLElement, styles: Partial<CSSStyleDeclaration>) {
+    Object.assign(this.style, styles);
+  };
+  HTMLElement.prototype.setCssProps = function (this: HTMLElement, _props: Record<string, string>) {
+    // no-op in test
+  };
+}
+
 /** TAbstractFile base */
 class TAbstractFile {
   name: string;
@@ -33,10 +43,13 @@ module.exports = {
   Setting: class Setting {
     setName() { return this; }
     setDesc() { return this; }
+    setHeading() { return this; }
     addText() { return this; }
     addToggle() { return this; }
     addDropdown() { return this; }
     addSlider() { return this; }
+    addButton() { return this; }
+    addExtraButton() { return this; }
   },
   PluginSettingTab: class PluginSettingTab {},
   ItemView: class ItemView {},

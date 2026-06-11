@@ -1,7 +1,7 @@
 import type { ChatRuntime, MessageContext } from '../../../core/providers/types';
 import type { Message } from '../../../core/types';
 
-export type ReviewVerdict = 'LGTM' | string;
+export type ReviewVerdict = string;
 
 export interface RunReviewOptions {
   userRequest: string;
@@ -124,7 +124,6 @@ export async function runReview(options: RunReviewOptions): Promise<ReviewVerdic
   } finally {
     try {
       await reviewRuntime.stop();
-    } catch {
-    }
+    } catch { /* ignore: review runtime already stopped */ }
   }
 }

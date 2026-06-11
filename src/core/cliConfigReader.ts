@@ -49,7 +49,7 @@ function getConfigDir(): string {
  *   - 多行字符串（含真实换行符的字符串字面量）
  *   - 结尾逗号
  */
-function parseJsonC(raw: string): any {
+function parseJsonC(raw: string): Record<string, unknown> {
   // Step 1: Remove multi-line comments /* ... */
   // Step 2: Remove single-line // comments (but not inside strings)
   // Step 3: Remove trailing commas before } or ]
@@ -155,7 +155,7 @@ export function readCliConfig(): CliConfig {
   }
 }
 
-function extractConfig(config: any): CliConfig {
+function extractConfig(config: Record<string, unknown>): CliConfig {
   if (typeof config !== 'object' || config === null) {
     return {};
   }
@@ -198,21 +198,25 @@ export function readCliModels(): string[] {
   try {
     if (!fs.existsSync(configPath)) return [];
     const raw = fs.readFileSync(configPath, 'utf-8');
-    let config: any;
+    let config: Record<string, unknown>;
     try {
-      config = JSON.parse(raw);
+      config = JSON.parse(raw) as Record<string, unknown>;
     } catch {
       config = parseJsonC(raw);
     }
     if (typeof config !== 'object' || config === null) return [];
     const models = new Set<string>();
-    if (config.model && typeof config.model === 'string') models.add(config.model);
-    if (config.small_model && typeof config.small_model === 'string') models.add(config.small_model);
-    if (config.agent && typeof config.agent === 'object' && config.agent !== null) {
-      for (const key of Object.keys(config.agent)) {
-        const agent = config.agent[key];
-        if (agent && typeof agent === 'object' && agent.model && typeof agent.model === 'string') {
-          models.add(agent.model);
+    const modelVal = config.model;
+    if (typeof modelVal === 'string') models.add(modelVal);
+    const smallModelVal = config.small_model;
+    if (typeof smallModelVal === 'string') models.add(smallModelVal);
+    const agentSection = config.agent;
+    if (typeof agentSection === 'object' && agentSection !== null) {
+      for (const key of Object.keys(agentSection as Record<string, unknown>)) {
+        const agent = (agentSection as Record<string, unknown>)[key];
+        if (typeof agent === 'object' && agent !== null) {
+          const agentModel = (agent as Record<string, unknown>).model;
+          if (typeof agentModel === 'string') models.add(agentModel);
         }
       }
     }
@@ -246,20 +250,23 @@ export function readCliMcpServers(): CliMcpServer[] {
   try {
     if (!fs.existsSync(configPath)) return [];
     const raw = fs.readFileSync(configPath, 'utf-8');
-    let config: any;
+    let config: Record<string, unknown>;
     try {
-      config = JSON.parse(raw);
+      config = JSON.parse(raw) as Record<string, unknown>;
     } catch {
       config = parseJsonC(raw);
     }
     if (typeof config !== 'object' || config === null) return [];
-    const mcpSection = config.mcp;
-    if (typeof mcpSection !== 'object' || mcpSection === null) return [];
+    const mcpVal = config.mcp;
+    if (typeof mcpVal !== 'object' || mcpVal === null) return [];
+    const mcpSection = mcpVal as Record<string, unknown>;
     const servers: CliMcpServer[] = [];
     for (const key of Object.keys(mcpSection)) {
       const s = mcpSection[key];
-      if (s && typeof s === 'object' && s.enabled !== false) {
-        const cmd = Array.isArray(s.command) ? s.command.join(' ') : (s.command || '');
+      if (typeof s === 'object' && s !== null) {
+        const sObj = s as Record<string, unknown>;
+        const cmdVal = sObj.command;
+        const cmd = Array.isArray(cmdVal) ? (cmdVal as string[]).join(' ') : (typeof cmdVal === 'string' ? cmdVal : '');
         servers.push({
           id: key,
           name: key,
@@ -289,23 +296,25 @@ export function readCliSubagents(): CliSubagent[] {
   try {
     if (!fs.existsSync(configPath)) return [];
     const raw = fs.readFileSync(configPath, 'utf-8');
-    let config: any;
+    let config: Record<string, unknown>;
     try {
-      config = JSON.parse(raw);
+      config = JSON.parse(raw) as Record<string, unknown>;
     } catch {
       config = parseJsonC(raw);
     }
     if (typeof config !== 'object' || config === null) return [];
-    const agentSection = config.agent;
-    if (typeof agentSection !== 'object' || agentSection === null) return [];
+    const agentVal = config.agent;
+    if (typeof agentVal !== 'object' || agentVal === null) return [];
+    const agentSection = agentVal as Record<string, unknown>;
     const agents: CliSubagent[] = [];
     for (const key of Object.keys(agentSection)) {
       const a = agentSection[key];
-      if (a && typeof a === 'object') {
+      if (typeof a === 'object' && a !== null) {
+        const aObj = a as Record<string, unknown>;
         agents.push({
           id: key,
           name: key,
-          description: a.model ? `model: ${a.model}` : undefined,
+          description: typeof aObj.model === 'string' ? `model: ${aObj.model}` : undefined,
         });
       }
     }

@@ -119,13 +119,13 @@ export class BinaryManager {
     try {
       const found = await this.spawnWithShell();
       if (found) return found;
-    } catch { }
+    } catch { /* ignore: kilo not in PATH */ }
 
     if (process.platform === 'win32') {
       try {
         const whereResult = this.findWithWhere();
         if (whereResult) return whereResult;
-      } catch { }
+      } catch { /* ignore: where.exe failed */ }
     }
     return null;
   }
@@ -169,7 +169,7 @@ export class BinaryManager {
           return line;
         }
       }
-    } catch { }
+    } catch { /* ignore: where.exe/kilo not found */ }
     return null;
   }
 
@@ -204,7 +204,7 @@ export class BinaryManager {
           console.debug('[KiloCode] findInGlobalPaths: found', candidate);
           return candidate;
         }
-      } catch { }
+      } catch { /* ignore: candidate path not accessible */ }
     }
 
     // Deep scan: find kilocode native binary under npm global
@@ -214,7 +214,7 @@ export class BinaryManager {
         const found = this.searchNpmGlobalDir(globalRoot);
         if (found) return found;
       }
-    } catch { }
+    } catch { /* ignore: npm root -g failed */ }
 
     if (appData) {
       const found = this.searchNpmGlobalDir(path.join(appData, 'npm', 'node_modules'));
@@ -240,7 +240,7 @@ export class BinaryManager {
             return candidate;
           }
         }
-      } catch { }
+      } catch { /* ignore: entries scan failed */ }
     }
 
     const directBin = path.join(cliDir, 'bin', 'kilo.exe');
@@ -325,7 +325,7 @@ export class BinaryManager {
     if (process.platform !== 'darwin') return;
     try {
       execSync('xattr -d com.apple.quarantine "' + binaryPath + '"', { timeout: 3000 });
-    } catch { }
+    } catch { /* ignore: xattr not available */ }
   }
 
   private getBinaryName(): string {

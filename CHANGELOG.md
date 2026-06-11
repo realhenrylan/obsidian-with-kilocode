@@ -11,6 +11,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Release Attestation**: 为 `main.js` / `styles.css` 添加 GitHub Artifact Attestation 签名，满足 Obsidian 商城审核要求
 - **移除 `os` 模块依赖**：`PlatformDetector.ts` / `cliConfigReader.ts` 不再 import `os` 模块，消除"系统身份信息读取"警告（`os.arch()` → `process.arch`，`os.platform()` → `process.platform`，`os.homedir()` → env vars）
 
+### Changed
+
+- **Error: 静态样式赋值**: `CustomInstructionModal` / `ImageContext` / `SettingsTab` / `VirtualScroller` 中使用 `setCssStyles()` 替代 `.style.xxx = yyy`，满足 `no-static-styles-assignment` 要求
+- **Error: HTML 标题元素**: `SettingsTab` 全部 8 处 `<h2>/<h3>` 替换为 `Setting.setHeading()`
+- **Warning: 空块语句**: 所有空 `catch {}` 添加注释，消除 no-empty 警告
+- **Warning: unsafe any 类型**: `cliConfigReader.ts` / `MCPToolAdapter.ts` / `MCPManager.ts` / `VirtualScroller.ts` 中 `any` 替换为 `Record<string, unknown>` 或泛型
+- **Warning: 弃用 API**: `MarkdownRenderer.renderMarkdown` → `MarkdownRenderer.render`；`SliderComponent.setDynamicTooltip` 移除；`Buffer.slice` → `Buffer.subarray`
+- **Warning: 硬编码路径**: `'.obsidian'` 替换为 `this.app.vault.configDir`
+- **其他清理**: 未使用变量/导入移除；`require('path')` → `import * as pathModule`；`'LGTM' | string` → `string`；多余类型断言清理
+
 ## [0.9.4] - 2026-05-29
 
 ### Fixed

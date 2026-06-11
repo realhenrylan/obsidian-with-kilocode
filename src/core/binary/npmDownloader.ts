@@ -30,16 +30,16 @@ export function extractBinaryFromTarball(tarBuffer: Buffer, targetPath: string):
   let offset = 0;
 
   while (offset + TAR_BLOCK_SIZE <= tarBuffer.length) {
-    const isZeroBlock = tarBuffer.slice(offset, offset + TAR_BLOCK_SIZE).every(b => b === 0);
+    const isZeroBlock = tarBuffer.subarray(offset, offset + TAR_BLOCK_SIZE).every(b => b === 0);
     if (isZeroBlock) break;
 
     let nameEnd = offset + 100;
     for (let i = offset; i < offset + 100; i++) {
       if (tarBuffer[i] === 0) { nameEnd = i; break; }
     }
-    const name = tarBuffer.slice(offset, nameEnd).toString('utf8');
+    const name = tarBuffer.subarray(offset, nameEnd).toString('utf8');
 
-    const sizeStr = tarBuffer.slice(offset + 124, offset + 136).toString('utf8').replace(/\0.*/, '');
+    const sizeStr = tarBuffer.subarray(offset + 124, offset + 136).toString('utf8').replace(/\0.*/, '');
     const size = parseInt(sizeStr, 8) || 0;
 
     const typeFlag = tarBuffer[offset + 156];
@@ -47,7 +47,7 @@ export function extractBinaryFromTarball(tarBuffer: Buffer, targetPath: string):
     offset += TAR_BLOCK_SIZE;
 
     if (name === targetPath && (typeFlag === 48 || typeFlag === 0) && size > 0) {
-      return tarBuffer.slice(offset, offset + size);
+      return tarBuffer.subarray(offset, offset + size);
     }
 
     offset += Math.ceil(size / TAR_BLOCK_SIZE) * TAR_BLOCK_SIZE;
