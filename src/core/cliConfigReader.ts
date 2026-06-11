@@ -118,7 +118,7 @@ function parseJsonC(raw: string): Record<string, unknown> {
     i++;
   }
 
-  return JSON.parse(chars.join(''));
+  return JSON.parse(chars.join('')) as Record<string, unknown>;
 }
 
 /**
@@ -137,7 +137,7 @@ export function readCliConfig(): CliConfig {
 
     // Try strict JSON first (fast path)
     try {
-      const config = JSON.parse(raw);
+      const config: Record<string, unknown> = JSON.parse(raw);
       return extractConfig(config);
     } catch {
       // Fall back to JSONC parser

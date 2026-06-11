@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.9.7] - 2026-06-11
+
+### Fixed
+
+- **Error: SettingsTab 标题违规**: `'KiloCode Settings'` → `'Configuration'`（移除 settings/插件名）；`'General'` → `'Basic'`
+- **Warning: unsafe `any`**: `KiloCodeChatRuntime.ts` 引入 `KiloSession`/`KiloClientInternals`/`StreamEventPart` 接口，消除所有 `(something as any)` 访问；`cliConfigReader.ts`/`BinaryManager.ts`/`main.ts` 相应修复
+- **Warning: Promise 未处理**: `ApprovalManager.ts` `.catch()` 补全；`ImageContext.ts`/`main.ts` 多处 `void` 标记
+- **Warning: `document` → `activeDocument`**: `MessageRenderer.ts`/`ImageContext.ts`/`FileAttachmentContext.ts` 共 7 处替换
+- **Warning: `setTimeout`/`clearTimeout` → `window.*`**: `MessageRenderer.ts`/`ConversationService.ts`/`main.ts`/`KiloCodeChatRuntime.ts`/`SkillWatcher.ts` 全量替换
+- **Warning: unsafe return/assertion**: `cliConfigReader.ts` JSON.parse 结果加类型断言；`main.ts` `loadData()` 加 `Partial<>` 约束
+- **Recommendation: `display` deprecation**: 暂未修复（需重构 SettingsTab）
+- **测试适配**: 新增 `tests/setup.ts`（`window` polyfill for Node）；`MessageRenderer.test.ts` `activeDocument` polyfill；timer 字段类型统一 `number | null`
+
 ## [0.9.6] - 2026-06-11
 
 ### Fixed

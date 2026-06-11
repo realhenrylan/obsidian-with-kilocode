@@ -14,6 +14,38 @@ import { QUESTION_PROTOCOL } from './prompts';
 const DEFAULT_AGENT = 'code';
 const SERVE_TIMEOUT = 15000;
 
+interface KiloSession {
+  create(params: { body: Record<string, unknown>; signal?: AbortSignal }): Promise<{ error?: unknown; data?: { id: string } }>;
+  abort(params: { path: { id: string } }): Promise<void>;
+  prompt(params: { path: { id: string }; body: Record<string, unknown>; signal?: AbortSignal }): Promise<{ error?: unknown; data?: { parts?: Array<Record<string, unknown>> } }>;
+}
+
+interface KiloClientInternals {
+  _client?: { setConfig(config: { headers: Record<string, string> }): void };
+  postSessionIdPermissionsPermissionId(params: { path: { id: string; permissionID: string }; body: { decision: string } }): Promise<void>;
+}
+
+interface StreamEventPart {
+  type?: string;
+  text?: string;
+  name?: string;
+  toolName?: string;
+  id?: string;
+  input?: Record<string, unknown>;
+  arguments?: Record<string, unknown>;
+  output?: string;
+  content?: string;
+  thinking?: string;
+  delta?: string;
+  part?: StreamEventPart;
+  properties?: Record<string, unknown>;
+  error?: unknown;
+  message?: string;
+  status?: string;
+  state?: string;
+  description?: string;
+}
+
 /** Node.js http-based fetch that bypasses CORS in Obsidian's Electron renderer.
  *  The standard fetch() in Electron renderer is subject to CORS (origin = app://obsidian.md
  *  cannot access http://127.0.0.1). This wrapper uses the Node.js http module directly,
@@ -77,7 +109,7 @@ function nodeFetch(input: RequestInfo | URL, init?: RequestInit, agent?: http.Ag
 
     req.on('error', (err) => {
       // Ignore abort errors
-      if ((err as any)?.code === 'ABORT_ERR') return;
+      if ((err as { code?: string })?.code === 'ABORT_ERR') return;
       reject(err);
     });
 
@@ -103,7 +135,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   private streaming = false;
   private pendingModel: string | null = null;
   private vaultPath: string | null = null;
-  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private idleTimer: number | null = null;
   private httpAgent: http.Agent;
   private boundFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -145,7 +177,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.abortController?.abort();
     if (this.client && this.sessionId) {
       try {
-        await (this.client.session as any).abort({ path: { id: this.sessionId } });
+        await (this.client.session as unknown as KiloSession).abort({ path: { id: this.sessionId } });
       } catch { /* ignore: session already ended */ }
     }
     if (this.serverHandle) {
@@ -192,7 +224,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.clearIdleTimer();
     this.abortController?.abort();
     if (this.client && this.sessionId) {
-      (this.client.session as any).abort({ path: { id: this.sessionId } }).catch(() => {});
+      void (this.client.session as unknown as KiloSession).abort({ path: { id: this.sessionId } }).catch(() => {});
     }
     this.streaming = false;
   }
@@ -210,7 +242,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     const signal = this.abortController.signal;
     try {
       if (!this.sessionId) {
-        const sessionResult = await (this.client.session as any).create({
+        const sessionResult = await (this.client.session as unknown as KiloSession).create({
           body: { agent: DEFAULT_AGENT, ...this.buildModelConfig() },
           signal,
         });
@@ -219,7 +251,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
           yield this.emit({ type: 'done' });
           return;
         }
-        this.sessionId = sessionResult.data.id as string;
+        this.sessionId = sessionResult.data!.id as string;
       }
 
       const t0 = performance.now();
@@ -229,7 +261,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         enhancedContent += `\n\n[User Custom Instructions]\n${context.customInstructions}`;
       }
 
-      const promptResult = await (this.client.session as any).prompt({
+      const promptResult = await (this.client.session as unknown as KiloSession).prompt({
         path: { id: this.sessionId },
         body: {
           agent: DEFAULT_AGENT,
@@ -256,12 +288,13 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         }
       }
       yield this.emit({ type: 'done' });
-    } catch (err: any) {
-      if (err?.name === 'AbortError') {
+    } catch (err: unknown) {
+      const errObj = err as { name?: string; message?: string };
+      if (errObj?.name === 'AbortError') {
         yield this.emit({ type: 'done' });
       } else {
         console.error('[KiloCodeChatRuntime] sendMessage error:', err);
-        yield this.emit({ type: 'error', error: err?.message || String(err) });
+        yield this.emit({ type: 'error', error: errObj?.message || String(err) });
         yield this.emit({ type: 'done' });
       }
     } finally {
@@ -272,7 +305,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
 
   sendApproval?(toolName: string, decision: 'allow' | 'deny'): void {
     if (this.client && this.sessionId) {
-      (this.client as any).postSessionIdPermissionsPermissionId({
+      void (this.client as unknown as KiloClientInternals).postSessionIdPermissionsPermissionId({
         path: { id: this.sessionId, permissionID: toolName },
         body: { decision },
       }).catch(() => {});
@@ -284,7 +317,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
    *  the client was created before the vault path was available. */
   private applyVaultPathToClient(): void {
     if (!this.vaultPath || !this.client) return;
-    const underlying = (this.client as any)._client;
+    const underlying = (this.client as unknown as KiloClientInternals)._client;
     if (underlying?.setConfig) {
       underlying.setConfig({
         headers: { 'x-kilo-directory': encodeURIComponent(this.vaultPath) },
@@ -399,7 +432,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
 
   private clearIdleTimer(): void {
     if (this.idleTimer !== null) {
-      clearTimeout(this.idleTimer);
+      window.clearTimeout(this.idleTimer);
       this.idleTimer = null;
     }
   }
@@ -408,13 +441,13 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.clearIdleTimer();
     const timeoutSeconds = this.getSettings().idleTimeoutSeconds ?? 120;
     if (timeoutSeconds <= 0) return;
-    this.idleTimer = setTimeout(() => {
+    this.idleTimer = window.setTimeout(() => {
       console.log('[KiloCodeChatRuntime] Idle timeout reached, stopping server');
-      this.stop();
+      void this.stop();
     }, timeoutSeconds * 1000);
   }
 
-  private parseSSEBlock(block: string): { type: string; data: any } | null {
+  private parseSSEBlock(block: string): { type: string; data: Record<string, unknown> } | null {
     const lines = block.split(String.fromCharCode(10));
     let eventType = '';
     let dataStr = '';
@@ -423,12 +456,12 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       else if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
     }
     if (!eventType || !dataStr) return null;
-    try { return { type: eventType, data: JSON.parse(dataStr) }; } catch { return null; }
+    try { return { type: eventType, data: JSON.parse(dataStr) as Record<string, unknown> }; } catch { return null; }
   }
 
-  private parseEvent(event: { type: string; data: any }): StreamChunk | null {
+  private parseEvent(event: { type: string; data: Record<string, unknown> }): StreamChunk | null {
     const { type, data } = event;
-    const props = data.properties || data;
+    const props = (data.properties ?? data) as StreamEventPart;
     switch (type) {
       // Server lifecycle events - ignore
       case 'server.connected':
@@ -439,8 +472,9 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       // Streaming text / reasoning / tool parts
       case 'message.part.delta':
       case 'message.stream.chunk': {
-        const partType = props.type || data.part?.type;
-        const partBody = props.part || data.part || props;
+        const dataPart = data.part as StreamEventPart | undefined;
+        const partType = props.type || dataPart?.type;
+        const partBody = props.part || dataPart || props;
         const text = partBody.text || partBody.delta || '';
 
         if (partType === 'reasoning' || partType === 'thinking') {
@@ -450,13 +484,13 @@ export class KiloCodeChatRuntime implements ChatRuntime {
           return { type: 'text' as StreamChunkType, content: text };
         }
         if (partType === 'tool_use' && (partBody.name || partBody.toolName)) {
-          return { type: 'tool_use' as StreamChunkType, toolCall: { id: partBody.id || ('tool-' + Date.now()), name: partBody.name || partBody.toolName, input: partBody.input || partBody.arguments || {}, status: 'running' } };
+          return { type: 'tool_use' as StreamChunkType, toolCall: { id: partBody.id || ('tool-' + Date.now()), name: partBody.name || partBody.toolName || '', input: partBody.input || partBody.arguments || {}, status: 'running' } };
         }
         if (partType === 'tool_result' && partBody.id) {
           return { type: 'tool_result' as StreamChunkType, toolCall: { id: partBody.id, name: partBody.name || '', input: partBody.input || {}, status: 'completed', result: partBody.output || partBody.content || '' } };
         }
         // Also try raw parsePart for backward compatibility
-        const parsed = this.parsePart(props.part || data.part || props);
+        const parsed = this.parsePart(props.part || dataPart || props);
         if (parsed) return parsed;
         return null;
       }
@@ -478,7 +512,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       // Session status — used to detect completion
       case 'session.status':
         if (props.status === 'error' || props.state === 'error') {
-          return { type: 'error' as StreamChunkType, error: props.error || 'Session error' };
+          return { type: 'error' as StreamChunkType, error: typeof props.error === 'string' ? props.error : props.message || 'Session error' };
         }
         return null;
 
@@ -492,13 +526,13 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         if (props.error) return { type: 'error' as StreamChunkType, error: typeof props.error === 'string' ? props.error : JSON.stringify(props.error) };
         return null;
       case 'message.stream.error':
-        return { type: 'error' as StreamChunkType, error: props.message || props.error || 'Unknown error' };
+        return { type: 'error' as StreamChunkType, error: props.message || (typeof props.error === 'string' ? props.error : '') || 'Unknown error' };
 
       default: return null;
     }
   }
 
-  private parsePart(part: any): StreamChunk | null {
+  private parsePart(part: StreamEventPart): StreamChunk | null {
     if (!part) return null;
     if (part.type === 'reasoning' || part.type === 'thinking' || part.thinking) return { type: 'thinking' as StreamChunkType, content: part.text || part.thinking || '' };
     if (part.type === 'text' && part.text) return { type: 'text' as StreamChunkType, content: part.text };

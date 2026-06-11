@@ -45,7 +45,7 @@ export class FileAttachmentContext {
 
   async addFromFile(): Promise<void> {
     return new Promise((resolve) => {
-      const input = document.createElement('input');
+      const input = activeDocument.createElement('input');
       input.type = 'file';
       input.multiple = true;
 

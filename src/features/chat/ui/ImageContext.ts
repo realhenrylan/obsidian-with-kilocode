@@ -22,7 +22,7 @@ export class ImageContext {
   /** 从文件选择器添加图片 */
   async addFromFile(): Promise<void> {
     return new Promise((resolve) => {
-      const input = document.createElement('input');
+      const input = activeDocument.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
       input.multiple = true;
@@ -57,7 +57,7 @@ export class ImageContext {
       if (item.type.startsWith('image/')) {
         const blob = item.getAsFile();
         if (blob) {
-          this.readFileAsBase64(blob).then(data => {
+          void this.readFileAsBase64(blob).then(data => {
             this.images.push({ data, mimeType: blob.type, name: 'pasted-image' });
             this.onUpdate?.();
           });
@@ -80,7 +80,7 @@ export class ImageContext {
           console.warn(`[ImageContext] Image ${file.name} exceeds ${this.maxSizeMB}MB limit`);
           continue;
         }
-        this.readFileAsBase64(file).then(data => {
+        void this.readFileAsBase64(file).then(data => {
           this.images.push({ data, mimeType: file.type, name: file.name });
           this.onUpdate?.();
         });

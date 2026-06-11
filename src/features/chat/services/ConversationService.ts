@@ -21,7 +21,7 @@ export class ConversationService {
   private queue: Promise<void> = Promise.resolve();
   // 磁盘写入防抖：标记脏会话，延迟批量写入
   private dirtyConversations: Set<string> = new Set();
-  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private saveTimer: number | null = null;
 
   constructor(app: App, vaultPath: string) {
     this.app = app;
@@ -44,8 +44,8 @@ export class ConversationService {
 
   /** 调度防抖写入：重置定时器，SAVE_DEBOUNCE_MS 后执行 */
   private scheduleSave(): void {
-    if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
+    if (this.saveTimer) window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => {
       this.saveTimer = null;
       void this.flushDirty();
     }, SAVE_DEBOUNCE_MS);
@@ -147,7 +147,7 @@ export class ConversationService {
    */
   async flush(): Promise<void> {
     if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
+      window.clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
     await this.flushDirty();

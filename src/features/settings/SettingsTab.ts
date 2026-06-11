@@ -20,7 +20,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.addClass('kilo-settings');
 
-    new Setting(containerEl).setName('KiloCode Settings').setHeading();
+    new Setting(containerEl).setName('Configuration').setHeading();
 
     // === CLI 配置状态 ===
     new Setting(containerEl).setName('CLI Configuration').setHeading();
@@ -39,7 +39,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           }
           // ⚠️ 不复制 apiKey——API key 只保留在 CLI 配置文件中，
           //    由 CLI 子进程自己读取，避免 vault 云同步泄露
-          this.plugin.saveSettings();
+          void this.plugin.saveSettings();
           this.display();
           new Notice('CLI config reloaded and applied');
         }));
@@ -100,7 +100,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     // === 常规设置 ===
-    new Setting(containerEl).setName('General').setHeading();
+    new Setting(containerEl).setName('Basic').setHeading();
 
     new Setting(containerEl)
       .setName('KiloCode CLI Path')
@@ -129,7 +129,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
               new Notice('KiloCode CLI not found on your system. Download will be attempted automatically.');
             }
           } catch (err) {
-            new Notice('Detection failed: ' + err.message);
+            new Notice('Detection failed: ' + (err instanceof Error ? err.message : String(err)));
           } finally {
             btn.setDisabled(false);
             btn.setButtonText('Detect');

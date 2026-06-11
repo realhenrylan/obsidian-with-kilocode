@@ -264,7 +264,7 @@ export class BinaryManager {
     if (!this.platformInfo) this.platformInfo = detectPlatform();
     new Notice('Initializing KiloCode AI core components, please wait...', 0);
 
-    let lastError = null;
+    let lastError: unknown = null;
     const sources = this.buildDownloadSources(settings);
 
     for (const source of sources) {

@@ -1,6 +1,6 @@
 // src/main.ts
 
-import { Plugin, FileSystemAdapter, Notice } from 'obsidian';
+import { Plugin, FileSystemAdapter, Notice, type WorkspaceLeaf } from 'obsidian';
 import * as path from 'path';
 import { VIEW_TYPE_KILOCODE } from './core/types';
 import type { KiloCodeSettings } from './core/types';
@@ -20,7 +20,7 @@ export default class KiloCodePlugin extends Plugin {
   binaryManager!: BinaryManager;
   private kilocodeRuntimes: Set<ChatRuntime> = new Set();
   warmupRuntimeRef: ChatRuntime | null = null;
-  private warmupTimer: ReturnType<typeof setTimeout> | null = null;
+  private warmupTimer: number | null = null;
   private skillWatcher: SkillWatcher | null = null;
   private exitHandlerRegistered = false;
 
@@ -47,9 +47,9 @@ export default class KiloCodePlugin extends Plugin {
   private scheduleWarmup(): void {
     if (!this.settings.autoStart) return;
 
-    this.warmupTimer = setTimeout(() => {
+    this.warmupTimer = window.setTimeout(() => {
       this.warmupTimer = null;
-      this.doWarmup();
+      void this.doWarmup();
     }, 1000);
   }
 
@@ -98,7 +98,7 @@ export default class KiloCodePlugin extends Plugin {
 
     // 添加功能区图标
     this.addRibbonIcon('bot', 'Open KiloCode', () => {
-      this.activateView();
+      void this.activateView();
     });
 
     // 添加命令
@@ -106,7 +106,7 @@ export default class KiloCodePlugin extends Plugin {
       id: 'open-view',
       name: 'Open chat view',
       callback: () => {
-        this.activateView();
+        void this.activateView();
       },
     });
 
@@ -174,7 +174,7 @@ export default class KiloCodePlugin extends Plugin {
     this.kilocodeRuntimes.clear();
 
     if (this.warmupTimer) {
-      clearTimeout(this.warmupTimer);
+      window.clearTimeout(this.warmupTimer);
       this.warmupTimer = null;
     }
 
@@ -190,10 +190,10 @@ export default class KiloCodePlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = {
-      ...DEFAULT_SETTINGS,
-      ...(await this.loadData()),
-    };
+      this.settings = {
+        ...DEFAULT_SETTINGS,
+        ...(await this.loadData()) as Partial<KiloCodeSettings>,
+      };
   }
 
   async saveSettings() {
@@ -216,7 +216,7 @@ export default class KiloCodePlugin extends Plugin {
     }
 
     if (leaf) {
-      workspace.revealLeaf(leaf);
+      void workspace.revealLeaf(leaf);
     }
   }
 }

@@ -114,6 +114,10 @@ export class ApprovalManager {
         }
 
         resolve(decision);
+      }).catch((err: unknown) => {
+        this.pendingRequests.delete(request.id);
+        resolve('deny');
+        console.error('[ApprovalManager] approval handler error:', err);
       });
     });
   }

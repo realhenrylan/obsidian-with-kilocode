@@ -4,6 +4,8 @@
 
 // tests/features/chat/rendering/MessageRenderer.test.ts
 
+(globalThis as any).activeDocument = document;
+
 import { MessageRenderer } from '../../../../src/features/chat/rendering/MessageRenderer';
 import type { Message, ContentBlock } from '../../../../src/core/types';
 

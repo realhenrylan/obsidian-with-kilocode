@@ -10,11 +10,11 @@ export function createSkillWatcher(vaultPath: string): SkillWatcher {
   const skillsDir = path.join(vaultPath, '.kilo', 'skills');
 
   let watcher: fs.FSWatcher | null = null;
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let debounceTimer: number | null = null;
 
   const invalidateAfterDebounce = (): void => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
+    if (debounceTimer) window.clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(() => {
       debounceTimer = null;
       invalidateSkillsCache();
     }, 300);
@@ -46,7 +46,7 @@ export function createSkillWatcher(vaultPath: string): SkillWatcher {
   return {
     dispose: (): void => {
       if (debounceTimer) {
-        clearTimeout(debounceTimer);
+        window.clearTimeout(debounceTimer);
         debounceTimer = null;
       }
       if (watcher) {

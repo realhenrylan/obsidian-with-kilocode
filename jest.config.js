@@ -14,4 +14,5 @@ module.exports = {
     '^@kilocode/sdk/client$': '<rootDir>/node_modules/@kilocode/sdk/dist/client.js',
   },
   transformIgnorePatterns: [],
+  setupFiles: ['<rootDir>/tests/setup.ts'],
 };

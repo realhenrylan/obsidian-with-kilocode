@@ -1,7 +1,7 @@
 {
   "id": "kilocode",
   "name": "KiloCode",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "minAppVersion": "1.7.2",
   "description": "Give KiloCode persistent project memory from your vault. Architecture decisions, skills, workflows, and sessions — all stored in markdown.",
   "author": "Henry Lan",

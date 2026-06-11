@@ -241,27 +241,27 @@ export class MessageRenderer {
       const codeText = codeEl?.textContent ?? '';
 
       // 包裹到 .kilo-code-wrapper
-      const wrapper = document.createElement('div');
+      const wrapper = activeDocument.createElement('div');
       wrapper.className = 'kilo-code-wrapper';
       pre.parentNode?.insertBefore(wrapper, pre);
       wrapper.appendChild(pre);
 
       // 头部栏：语言标签 + 复制按钮
-      const header = document.createElement('div');
+      const header = activeDocument.createElement('div');
       header.className = 'kilo-code-header';
 
-      const langLabel = document.createElement('span');
+      const langLabel = activeDocument.createElement('span');
       langLabel.className = 'kilo-code-lang';
       langLabel.textContent = langClass || 'code';
       header.appendChild(langLabel);
 
-      const copyBtn = document.createElement('button');
+      const copyBtn = activeDocument.createElement('button');
       copyBtn.className = 'kilo-code-copy';
       copyBtn.textContent = 'Copy';
       copyBtn.addEventListener('click', () => {
         void navigator.clipboard.writeText(codeText).then(() => {
           copyBtn.textContent = 'Copied!';
-          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+          window.setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
         });
       });
       header.appendChild(copyBtn);
