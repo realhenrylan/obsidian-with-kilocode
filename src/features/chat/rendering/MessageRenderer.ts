@@ -112,6 +112,7 @@ export class MessageRenderer {
       if (textContent) {
         const markdownEl = textEl.createDiv({ cls: 'kilo-message-text' });
         void MarkdownRenderer.render(
+          this.app,
           textContent,
           markdownEl,
           '',
@@ -138,7 +139,7 @@ export class MessageRenderer {
       this.virtualScroller = new VirtualScroller(
         this.container,
         { itemHeight: 100, overscan: 5 },
-        (message, index) => this.renderMessage(message)
+        (message: Message, index) => this.renderMessage(message)
       );
       this.virtualScroller.setItems(messages);
     } else {
@@ -193,6 +194,7 @@ export class MessageRenderer {
       if (message.content) {
         const textEl = contentEl.createDiv({ cls: 'kilo-message-text' });
         void MarkdownRenderer.render(
+          this.app,
           message.content,
           textEl,
           '',

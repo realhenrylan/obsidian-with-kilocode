@@ -1,7 +1,7 @@
 // src/core/providers/types.ts
 
 import type { ProviderId, ToolCallInfo } from '../types';
-export type { ProviderId, ToolCallInfo } from '../types';
+export type { ProviderId, ToolCallInfo, Message } from '../types';
 
 /** Provider 能力定义 */
 export interface ProviderCapabilities {

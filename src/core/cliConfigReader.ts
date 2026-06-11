@@ -159,11 +159,11 @@ function extractConfig(config: Record<string, unknown>): CliConfig {
   if (typeof config !== 'object' || config === null) {
     return {};
   }
-  const modelId = config.model || config.defaultModel;
+  const modelId = (config.model || config.defaultModel) as string | undefined;
   return {
     defaultModel: modelId,
-    apiKey: config.apiKey,
-    baseUrl: config.baseUrl,
+    apiKey: config.apiKey as string | undefined,
+    baseUrl: config.baseUrl as string | undefined,
   };
 }
 
