@@ -3,7 +3,7 @@
   "name": "KiloCode",
   "version": "0.10.0",
   "minAppVersion": "1.13.0",
-  "description": "Give KiloCode persistent project memory from your vault. Architecture decisions, skills, workflows, and sessions â€?all stored in markdown.",
+  "description": "Give KiloCode persistent project memory from your vault. Architecture decisions, skills, workflows, and sessions â€” all stored in markdown.",
   "author": "Henry Lan",
   "authorUrl": "https://github.com/realhenrylan",
   "isDesktopOnly": true

@@ -6,7 +6,7 @@ import type KiloCodePlugin from '../../main';
 import { readCliConfig, getCliConfigPath, cliHasApiKey } from '../../core/cliConfigReader';
 
 /**
- * KiloCode Settings Tab
+ * KiloCode ËÆæÁΩÆÈù¢Êùø
  */
 export class KiloCodeSettingTab extends PluginSettingTab {
   plugin: KiloCodePlugin;
@@ -16,28 +16,18 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  /**
-   * Fallback render for Obsidian < 1.13.0.
-   */
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass('kilo-settings');
-    this.renderContent(containerEl);
-  }
-
-  /**
-   * Imperative render used by display() for backward compatibility.
-   */
-  private renderContent(containerEl: HTMLElement): void {
-    const cliConfig = readCliConfig();
-    const configPath = getCliConfigPath();
-    const hasApiKey = cliHasApiKey();
 
     new Setting(containerEl).setName('Configuration').setHeading();
 
-    // CLI Configuration
+    // === CLI ÈÖçÁΩÆÁä∂ÊÄÅ ===
     new Setting(containerEl).setName('CLI Configuration').setHeading();
+    const cliConfig = readCliConfig();
+    const configPath = getCliConfigPath();
+    const hasApiKey = cliHasApiKey();
     new Setting(containerEl)
       .setName('CLI Config File')
       .setDesc(`Path: ${configPath}`)
@@ -48,6 +38,8 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           if (updated.defaultModel) {
             this.plugin.settings.defaultModel = updated.defaultModel;
           }
+          // ‚ö†Ô∏è ‰∏çÂ§çÂà∂ apiKey‚Äî‚ÄîAPI key Âè™‰øùÁïôÂú® CLI ÈÖçÁΩÆÊñá‰ª∂‰∏≠Ôºå
+          //    Áî± CLI Â≠êËøõÁ®ãËá™Â∑±ËØªÂèñÔºåÈÅøÂÖç vault ‰∫ëÂêåÊ≠•Ê≥ÑÈú≤
           void this.plugin.saveSettings();
           this.display();
           new Notice('CLI config reloaded and applied');
@@ -65,14 +57,16 @@ export class KiloCodeSettingTab extends PluginSettingTab {
       });
     }
 
+    // API Configuration Âå∫Âüü‰∏ãÊñπÁöÑÂÆâÂÖ®ÊèêÁ§∫
     const vaultConfigDir = this.app.vault.configDir;
     containerEl.createDiv({
       cls: 'kilo-setting-warning',
-      text: `?? If you enter an API key below, it will be stored in the vault plugin data file (${vaultConfigDir}/plugins/kilocode/data.json) and may be exposed if the vault is synced to cloud or Git. Prefer configuring the API key in kilo CLI config (~/.config/kilo/config.json) instead.`,
+      text: `‚ö†Ô∏è If you enter an API key below, it will be stored in the vault plugin data file (${vaultConfigDir}/plugins/kilocode/data.json) and may be exposed if the vault is synced to cloud or Git. Prefer configuring the API key in kilo CLI config (~/.config/kilo/config.json) instead.`,
     });
 
-    // API Configuration
+    // === API ÈÖçÁΩÆ ===
     new Setting(containerEl).setName('API Configuration').setHeading();
+
     new Setting(containerEl)
       .setName('API Key')
       .setDesc('Your AI provider API key (e.g. Anthropic, OpenAI)')
@@ -106,7 +100,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    // Basic
+    // === Â∏∏ËßÑËÆæÁΩÆ ===
     new Setting(containerEl).setName('Basic').setHeading();
 
     new Setting(containerEl)
@@ -144,6 +138,17 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
+      .setName('Download Mirror URL')
+      .setDesc('Custom mirror URL for downloading CLI binary. Leave empty to use npm registry.')
+      .addText(text => text
+        .setPlaceholder('https://registry.npmjs.org')
+        .setValue(this.plugin.settings.mirrorUrl)
+        .onChange(async (value) => {
+          this.plugin.settings.mirrorUrl = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
       .setName('Auto Start')
       .setDesc('Automatically start KiloCode CLI when opening a vault')
       .addToggle(toggle => toggle
@@ -155,7 +160,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('Idle Timeout (seconds)')
-      .setDesc('Auto-stop KiloCode CLI after this many seconds of inactivity. Set to 0 to keep the process running (not recommended °™ wastes tokens). Default: 600s (10 minutes).')
+      .setDesc('Auto-stop KiloCode CLI after this many seconds of inactivity. Set to 0 to keep the process running (not recommended \u2014 wastes tokens). Default: 600s (10 minutes).')
       .addSlider(slider => slider
         .setLimits(0, 600, 10)
         .setValue(this.plugin.settings.idleTimeoutSeconds)
@@ -174,7 +179,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    // Chat
+    // === ËÅäÂ§©ËÆæÁΩÆ ===
     new Setting(containerEl).setName('Chat').setHeading();
 
     new Setting(containerEl)
@@ -198,7 +203,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    // Model
+    // === Ê®°ÂûãËÆæÁΩÆ ===
     new Setting(containerEl).setName('Model').setHeading();
 
     new Setting(containerEl)
@@ -226,7 +231,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    // Appearance
+    // === Â§ñËßÇËÆæÁΩÆ ===
     new Setting(containerEl).setName('Appearance').setHeading();
 
     new Setting(containerEl)
@@ -253,16 +258,16 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    // Security
+    // === ÂÆâÂÖ®ËÆæÁΩÆ ===
     new Setting(containerEl).setName('Security').setHeading();
 
     new Setting(containerEl)
       .setName('Permission Mode')
       .setDesc('Control how AI tool calls are approved')
       .addDropdown(dropdown => dropdown
-        .addOption('normal', 'Normal °™ approve write operations')
-        .addOption('yolo', 'Yolo °™ auto-approve all operations')
-        .addOption('plan', 'Plan °™ read-only, deny all writes')
+        .addOption('normal', 'Normal ‚Äî approve write operations')
+        .addOption('yolo', 'Yolo ‚Äî auto-approve all operations')
+        .addOption('plan', 'Plan ‚Äî read-only, deny all writes')
         .setValue(this.plugin.settings.permissionMode)
         .onChange(async (value: string) => {
           this.plugin.settings.permissionMode = value as 'yolo' | 'normal' | 'plan';
@@ -282,14 +287,14 @@ export class KiloCodeSettingTab extends PluginSettingTab {
 
     const result: SettingDefinitionItem[] = [];
 
-    // ©§©§ CLI Configuration ©§©§
+    // ‚îÄ‚îÄ CLI Configuration ‚îÄ‚îÄ
     const cliGroup: SettingDefinitionGroup = {
       type: 'group',
       heading: 'CLI Configuration',
       items: [],
     };
 
-    // CLI Config File °™ button to reload
+    // CLI Config File ‚Äî button to reload
     cliGroup.items!.push({
       name: 'CLI Config File',
       desc: `Path: ${configPath}`,
@@ -324,14 +329,14 @@ export class KiloCodeSettingTab extends PluginSettingTab {
 
     // API key warning
     cliGroup.items!.push({
-      name: '?? Security Notice',
+      name: '‚ö†Ô∏è Security Notice',
       desc: `API key stored in ${vaultConfigDir}/plugins/kilocode/data.json may be exposed if vault is synced. Prefer configuring API key in kilo CLI config instead.`,
       render: () => {},
     } as SettingDefinitionRender);
 
     result.push(cliGroup);
 
-    // ©§©§ API Configuration ©§©§
+    // ‚îÄ‚îÄ API Configuration ‚îÄ‚îÄ
     const apiGroup: SettingDefinitionGroup = {
       type: 'group',
       heading: 'API Configuration',
@@ -377,7 +382,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     };
     result.push(apiGroup);
 
-    // ©§©§ Basic ©§©§
+    // ‚îÄ‚îÄ Basic ‚îÄ‚îÄ
     const basicGroup: SettingDefinitionGroup = {
       type: 'group',
       heading: 'Basic',
@@ -459,7 +464,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     };
     result.push(basicGroup);
 
-    // ©§©§ Chat ©§©§
+    // ‚îÄ‚îÄ Chat ‚îÄ‚îÄ
     const chatGroup: SettingDefinitionGroup = {
       type: 'group',
       heading: 'Chat',
@@ -493,7 +498,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     };
     result.push(chatGroup);
 
-    // ©§©§ Model ©§©§
+    // ‚îÄ‚îÄ Model ‚îÄ‚îÄ
     const modelGroup: SettingDefinitionGroup = {
       type: 'group',
       heading: 'Model',
@@ -531,7 +536,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     };
     result.push(modelGroup);
 
-    // ©§©§ Appearance ©§©§
+    // ‚îÄ‚îÄ Appearance ‚îÄ‚îÄ
     const appearanceGroup: SettingDefinitionGroup = {
       type: 'group',
       heading: 'Appearance',
@@ -568,7 +573,7 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     };
     result.push(appearanceGroup);
 
-    // ©§©§ Security ©§©§
+    // ‚îÄ‚îÄ Security ‚îÄ‚îÄ
     const securityGroup: SettingDefinitionGroup = {
       type: 'group',
       heading: 'Security',
@@ -578,9 +583,9 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           desc: 'Control how AI tool calls are approved',
           render: (setting) => {
             setting.addDropdown(dropdown => dropdown
-              .addOption('normal', 'Normal °™ approve write operations')
-              .addOption('yolo', 'Yolo °™ auto-approve all operations')
-              .addOption('plan', 'Plan °™ read-only, deny all writes')
+              .addOption('normal', 'Normal ‚Äî approve write operations')
+              .addOption('yolo', 'Yolo ‚Äî auto-approve all operations')
+              .addOption('plan', 'Plan ‚Äî read-only, deny all writes')
               .setValue(this.plugin.settings.permissionMode)
               .onChange(async (value: string) => {
                 this.plugin.settings.permissionMode = value as 'yolo' | 'normal' | 'plan';
