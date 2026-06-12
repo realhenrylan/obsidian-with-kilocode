@@ -1,27 +1,27 @@
-ï»¿// src/core/cliConfigReader.ts
-// è¯»å– kilo CLI æœ¬åœ°é…ç½®æ–‡ä»¶ï¼Œä½¿æ’ä»¶è‡ªåŠ¨æ„ŸçŸ¥ CLI çš„æ¨¡å‹è®¾ç½®ã€‚
-// é¿å…ç”¨æˆ·åœ¨æ’ä»¶å’Œ CLI ä¸¤å¤„åˆ†åˆ«é…ç½®ã€‚
+// src/core/cliConfigReader.ts
+// ¶ÁÈ¡ kilo CLI ±¾µØÅäÖÃÎÄ¼ş£¬Ê¹²å¼ş×Ô¶¯¸ĞÖª CLI µÄÄ£ĞÍÉèÖÃ¡£
+// ±ÜÃâÓÃ»§ÔÚ²å¼şºÍ CLI Á½´¦·Ö±ğÅäÖÃ¡£
 
 import * as fs from 'fs';
 import * as path from 'path';
 import type { KiloCodeSettings } from './types';
 
 /**
- * kilo CLI é…ç½®æ–‡ä»¶ä¸­å¯èƒ½çš„å­—æ®µã€‚
+ * kilo CLI ÅäÖÃÎÄ¼şÖĞ¿ÉÄÜµÄ×Ö¶Î¡£
  */
 export interface CliConfig {
-  /** é»˜è®¤æ¨¡å‹ IDï¼Œå¦‚ "deepseek/deepseek-v4-flash" */
+  /** Ä¬ÈÏÄ£ĞÍ ID£¬Èç "deepseek/deepseek-v4-flash" */
   defaultModel?: string;
   /** API Key */
   apiKey?: string;
-  /** è‡ªå®šä¹‰ API åŸºç¡€ URL */
+  /** ×Ô¶¨Òå API »ù´¡ URL */
   baseUrl?: string;
-  /** å…¶ä»–æœªçŸ¥å­—æ®µ */
+  /** ÆäËûÎ´Öª×Ö¶Î */
   [key: string]: unknown;
 }
 
 /**
- * è·å– kilo CLI é…ç½®æ–‡ä»¶è·¯å¾„ï¼ˆæŒ‰ä¼˜å…ˆçº§å°è¯•å¤šä¸ªæ–‡ä»¶åï¼‰ã€‚
+ * »ñÈ¡ kilo CLI ÅäÖÃÎÄ¼şÂ·¾¶£¨°´ÓÅÏÈ¼¶³¢ÊÔ¶à¸öÎÄ¼şÃû£©¡£
  */
 export function getCliConfigPath(): string {
   const configDir = getConfigDir();
@@ -43,11 +43,11 @@ function getConfigDir(): string {
 }
 
 /**
- * å°è¯•å°† JSONC å†…å®¹è§£æä¸º JSONã€‚
- * å¤„ç†ï¼š
- *   - å•è¡Œæ³¨é‡Š // ï¼ˆä¸åœ¨å­—ç¬¦ä¸²å†…æ—¶ç§»é™¤ï¼‰
- *   - å¤šè¡Œå­—ç¬¦ä¸²ï¼ˆå«çœŸå®æ¢è¡Œç¬¦çš„å­—ç¬¦ä¸²å­—é¢é‡ï¼‰
- *   - ç»“å°¾é€—å·
+ * ³¢ÊÔ½« JSONC ÄÚÈİ½âÎöÎª JSON¡£
+ * ´¦Àí£º
+ *   - µ¥ĞĞ×¢ÊÍ // £¨²»ÔÚ×Ö·û´®ÄÚÊ±ÒÆ³ı£©
+ *   - ¶àĞĞ×Ö·û´®£¨º¬ÕæÊµ»»ĞĞ·ûµÄ×Ö·û´®×ÖÃæÁ¿£©
+ *   - ½áÎ²¶ººÅ
  */
 function parseJsonC(raw: string): Record<string, unknown> {
   // Step 1: Remove multi-line comments /* ... */
@@ -122,7 +122,7 @@ function parseJsonC(raw: string): Record<string, unknown> {
 }
 
 /**
- * è¯»å– kilo CLI é…ç½®æ–‡ä»¶ã€‚
+ * ¶ÁÈ¡ kilo CLI ÅäÖÃÎÄ¼ş¡£
  */
 export function readCliConfig(): CliConfig {
   const configPath = getCliConfigPath();
@@ -137,7 +137,7 @@ export function readCliConfig(): CliConfig {
 
     // Try strict JSON first (fast path)
     try {
-      const config: Record<string, unknown> = JSON.parse(raw);
+      const config = JSON.parse(raw) as Record<string, unknown>;
       return extractConfig(config);
     } catch {
       // Fall back to JSONC parser
@@ -168,10 +168,10 @@ function extractConfig(config: Record<string, unknown>): CliConfig {
 }
 
 /**
- * ä» CLI é…ç½®åˆå¹¶åˆ°æ’ä»¶è®¾ç½®ã€‚
- * è§„åˆ™ï¼šCLI é…ç½®ä½œä¸º fallbackï¼Œæ’ä»¶å·²æœ‰å€¼ï¼ˆéç©ºï¼‰ä¼˜å…ˆã€‚
+ * ´Ó CLI ÅäÖÃºÏ²¢µ½²å¼şÉèÖÃ¡£
+ * ¹æÔò£ºCLI ÅäÖÃ×÷Îª fallback£¬²å¼şÒÑÓĞÖµ£¨·Ç¿Õ£©ÓÅÏÈ¡£
  *
- * âš ï¸ å®‰å…¨çº¦æŸï¼šä¸å¤åˆ¶ apiKeyã€‚
+ * ?? °²È«Ô¼Êø£º²»¸´ÖÆ apiKey¡£
  */
 export function mergeCliConfigIntoSettings(
   settings: KiloCodeSettings,
@@ -190,8 +190,8 @@ export function mergeCliConfigIntoSettings(
 }
 
 /**
- * ä» CLI é…ç½®æå–æ‰€æœ‰æ¨¡å‹ IDï¼ˆå»é‡ï¼‰ã€‚
- * æ‰«æ modelã€small_modelã€agent.*.model å­—æ®µã€‚
+ * ´Ó CLI ÅäÖÃÌáÈ¡ËùÓĞÄ£ĞÍ ID£¨È¥ÖØ£©¡£
+ * É¨Ãè model¡¢small_model¡¢agent.*.model ×Ö¶Î¡£
  */
 export function readCliModels(): string[] {
   const configPath = getCliConfigPath();
@@ -227,14 +227,14 @@ export function readCliModels(): string[] {
 }
 
 /**
- * æ£€æŸ¥ CLI é…ç½®æ–‡ä»¶ä¸­æ˜¯å¦æœ‰ API keyï¼ˆä»…ç”¨äº UI æ˜¾ç¤º"å·²é…ç½®"çŠ¶æ€ï¼‰ã€‚
+ * ¼ì²é CLI ÅäÖÃÎÄ¼şÖĞÊÇ·ñÓĞ API key£¨½öÓÃÓÚ UI ÏÔÊ¾"ÒÑÅäÖÃ"×´Ì¬£©¡£
  */
 export function cliHasApiKey(): boolean {
   const config = readCliConfig();
   return !!config.apiKey;
 }
 
-/** CLI é…ç½®ä¸­çš„ MCP æœåŠ¡å™¨é¡¹ */
+/** CLI ÅäÖÃÖĞµÄ MCP ·şÎñÆ÷Ïî */
 export interface CliMcpServer {
   id: string;
   name: string;
@@ -242,8 +242,8 @@ export interface CliMcpServer {
 }
 
 /**
- * ä» CLI é…ç½®è¯»å– MCP æœåŠ¡å™¨åˆ—è¡¨ã€‚
- * è¯»å– `config.mcp` å­—æ®µï¼Œè¿‡æ»¤æ‰æœªå¯ç”¨çš„æœåŠ¡å™¨ã€‚
+ * ´Ó CLI ÅäÖÃ¶ÁÈ¡ MCP ·şÎñÆ÷ÁĞ±í¡£
+ * ¶ÁÈ¡ `config.mcp` ×Ö¶Î£¬¹ıÂËµôÎ´ÆôÓÃµÄ·şÎñÆ÷¡£
  */
 export function readCliMcpServers(): CliMcpServer[] {
   const configPath = getCliConfigPath();
@@ -280,7 +280,7 @@ export function readCliMcpServers(): CliMcpServer[] {
   }
 }
 
-/** CLI é…ç½®ä¸­çš„å­ä»£ç†é¡¹ */
+/** CLI ÅäÖÃÖĞµÄ×Ó´úÀíÏî */
 export interface CliSubagent {
   id: string;
   name: string;
@@ -288,8 +288,8 @@ export interface CliSubagent {
 }
 
 /**
- * ä» CLI é…ç½®è¯»å–å­ä»£ç†ï¼ˆagentï¼‰åˆ—è¡¨ã€‚
- * è¯»å– `config.agent` å­—æ®µã€‚
+ * ´Ó CLI ÅäÖÃ¶ÁÈ¡×Ó´úÀí£¨agent£©ÁĞ±í¡£
+ * ¶ÁÈ¡ `config.agent` ×Ö¶Î¡£
  */
 export function readCliSubagents(): CliSubagent[] {
   const configPath = getCliConfigPath();
