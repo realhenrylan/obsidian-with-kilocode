@@ -18,6 +18,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.10.0] - 2026-06-12
+
+### Fixed
+
+- **Warning: throw non-Error object**: `BinaryManager.ts` `throw lastError` 改为 `instanceof Error` 检查后再抛出，消除 Obsidian Review 警告
+- **Warning: unsafe any from JSON.parse**: `cliConfigReader.ts` JSON.parse 结果使用 `as Record<string, unknown>` 类型断言替代变量类型注解
+- **Warning: unsafe construction/return in registerView**: `main.ts` registerView 回调添加 `(leaf: WorkspaceLeaf)` 类型注解，解决未类型化 leaf 参数和未使用 WorkspaceLeaf 导入的问题
+- **Warning: unnecessary double assertion**: `KiloCodeChatRuntime.ts` 移除非空断言 `data!` 后冗余的 `as string` 类型断言
+
+### Changed
+
+- **Recommendation: display deprecation 修复**: `SettingsTab` 迁移至 `getSettingDefinitions()` 声明式设置 API（Obsidian 1.13.0+），`display()` 保留为旧版向后兼容回退。这是 0.9.7 遗留的最后一项 Obsidian Review 推荐项
+- **SettingsTab 重构**:
+  - 提取 `renderContent()` 方法分离 imperative 渲染逻辑
+  - 新增 CLI Path 自动检测按钮（调用 `BinaryManager.autoDetect()`）
+  - 移除 `Download Mirror URL` 设置项（BinaryManager 已内置镜像支持）
+  - 设置分组名称本地化（"常规设置"→"Basic"，"聊天设置"→"Chat"等）
+- **Dependencies 更新**:
+  - `minAppVersion`: `1.7.2` → `1.13.0`（需 `getSettingDefinitions()` API 支持）
+  - `obsidian` 类型定义: `latest` → `^1.13.0`
+  - `versions.json`: 添加 `"0.10.0": "1.13.0"` 版本映射
+
 ## [0.9.7] - 2026-06-11
 
 ### Fixed
