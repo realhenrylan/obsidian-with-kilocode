@@ -1,4 +1,4 @@
-ï»¿import type { ChatRuntime, MessageContext, StreamChunk, StreamChunkType } from '../../../core/providers/types';
+import type { ChatRuntime, MessageContext, StreamChunk, StreamChunkType } from '../../../core/providers/types';
 import type { BinaryManager } from '../../../core/binary/BinaryManager';
 import type { KiloCodeSettings } from '../../../core/types';
 
@@ -81,7 +81,7 @@ function nodeFetch(input: RequestInfo | URL, init?: RequestInit, agent?: http.Ag
         const isSSE = ct.includes('text/event-stream');
 
         if (isSSE) {
-          // SSE: bridge Node.js Readable â†’ Web ReadableStream
+          // SSE: bridge Node.js Readable ¡ú Web ReadableStream
           const stream = new ReadableStream({
             start(controller) {
               res.on('data', (chunk: Buffer) => controller.enqueue(chunk));
@@ -190,7 +190,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.httpAgent.destroy();
   }
 
-  /** åŒæ­¥å¼ºåˆ¶ç»ˆæ­¢ CLI è¿›ç¨‹ï¼ˆç”¨äºŽ process.on('exit') å…œåº•æ¸…ç†ï¼‰ */
+  /** Í¬²½Ç¿ÖÆÖÕÖ¹ CLI ½ø³Ì£¨ÓÃÓÚ process.on('exit') ¶µµ×ÇåÀí£© */
   killSync(): void {
     this.clearIdleTimer();
     this.abortController?.abort();
@@ -251,7 +251,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
           yield this.emit({ type: 'done' });
           return;
         }
-        this.sessionId = sessionResult.data!.id as string;
+        this.sessionId = sessionResult.data!.id;
       }
 
       const t0 = performance.now();
@@ -411,7 +411,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     const specialistSkills = skills.filter(s => s.name !== 'kilocode-core');
 
     if (coreSkills.length > 0) {
-      parts.push('[SYSTEM CONTEXT â€” Obsidian KiloCode Core]');
+      parts.push('[SYSTEM CONTEXT ¡ª Obsidian KiloCode Core]');
       for (const core of coreSkills) {
         parts.push(core.content);
       }
@@ -502,14 +502,14 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         }
         return null;
 
-      // Full message updated â€” signal done
+      // Full message updated ¡ª signal done
       case 'message.updated':
         if (props.error) {
           return { type: 'error' as StreamChunkType, error: typeof props.error === 'string' ? props.error : JSON.stringify(props.error) };
         }
         return { type: 'done' as StreamChunkType };
 
-      // Session status â€” used to detect completion
+      // Session status ¡ª used to detect completion
       case 'session.status':
         if (props.status === 'error' || props.state === 'error') {
           return { type: 'error' as StreamChunkType, error: typeof props.error === 'string' ? props.error : props.message || 'Session error' };

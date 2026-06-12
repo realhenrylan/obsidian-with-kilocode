@@ -69,7 +69,7 @@ export default class KiloCodePlugin extends Plugin {
   async onload() {
     await this.loadSettings();
 
-    // 读取本机 kilo CLI 配置文件，自动填充模型（不复制 API key）
+    // 读取本机 kilo CLI 配置文件，自动填充模型（不复�?API key�?
     // 插件设置中已有的值优先，CLI 配置作为 fallback
     const cliConfig = readCliConfig();
     mergeCliConfigIntoSettings(this.settings, cliConfig);
@@ -77,8 +77,8 @@ export default class KiloCodePlugin extends Plugin {
       console.log('[KiloCode] Using CLI default model:', cliConfig.defaultModel);
     }
 
-    // 创建 BinaryManager 并后台预加载二进制
-    // manifest.dir 是相对路径，需要转为绝对路径以确保 fs 和 spawn 正常工作
+    // 创建 BinaryManager 并后台预加载二进�?
+    // manifest.dir 是相对路径，需要转为绝对路径以确保 fs �?spawn 正常工作
     const adapter = this.app.vault.adapter;
     const vaultPath = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : '';
     const pluginDir = path.join(vaultPath, this.manifest.dir ?? '');
@@ -87,16 +87,16 @@ export default class KiloCodePlugin extends Plugin {
       console.error('[KiloCode] Binary preload failed:', err);
     });
 
-    // 注册 Provider（传入 settings getter，确保 runtime 拿到最新的用户配置）
+    // 注册 Provider（传�?settings getter，确�?runtime 拿到最新的用户配置�?
     ProviderRegistry.register(createKilocodeRegistration(this.binaryManager, () => this.settings));
 
     // 注册视图
     this.registerView(
       VIEW_TYPE_KILOCODE,
-      (leaf) => new KiloCodeView(leaf, this)
+      (leaf: WorkspaceLeaf) => new KiloCodeView(leaf, this)
     );
 
-    // 添加功能区图标
+    // 添加功能区图�?
     this.addRibbonIcon('bot', 'Open KiloCode', () => {
       void this.activateView();
     });
@@ -160,7 +160,7 @@ export default class KiloCodePlugin extends Plugin {
     // 后台预热 CLI（autoStart=true 时有效）
     this.scheduleWarmup();
 
-    // 启动技能文件热重载监听器
+    // 启动技能文件热重载监听�?
     this.skillWatcher = createSkillWatcher(vaultPath);
 
     // 注册同步退出清理，防止 Obsidian 关闭后子进程残留

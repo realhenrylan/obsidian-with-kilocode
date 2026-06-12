@@ -286,7 +286,7 @@ export class BinaryManager {
     }
 
     new Notice('KiloCode core component download failed. Please configure CLI path in settings.', 10000);
-    throw lastError || new Error('All download sources failed');
+    throw lastError instanceof Error ? lastError : new Error('All download sources failed');
   }
 
   private buildDownloadSources(settings: KiloCodeSettings): Array<{ packageName: string; registry?: string }> {
