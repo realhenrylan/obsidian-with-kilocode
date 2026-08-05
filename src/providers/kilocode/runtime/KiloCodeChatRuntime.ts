@@ -2,6 +2,7 @@ import type { ChatRuntime, MessageContext, StreamChunk, StreamChunkType } from '
 import type { BinaryManager } from '../../../core/binary/BinaryManager';
 import type { KiloCodeSettings } from '../../../core/types';
 
+<<<<<<< HEAD
 import { createKiloServer } from '@kilocode/sdk/server';
 import { createKiloClient } from '@kilocode/sdk/client';
 import type { KiloClient } from '@kilocode/sdk/client';
@@ -10,10 +11,15 @@ import * as pathModule from 'path';
 import { EventBuffer } from './EventBuffer';
 import { loadSkills } from './SkillLoader';
 import { QUESTION_PROTOCOL } from './prompts';
+=======
+import { createKiloServer, type ServerOptions } from '@kilocode/sdk/server';
+import { createKiloClient, type KiloClient, type Config } from '@kilocode/sdk/client';
+>>>>>>> 867107b (feat: Phase 3 §5.3 — MCP path A passthrough to kilo serve with real status query)
 
 const DEFAULT_AGENT = 'code';
 const SERVE_TIMEOUT = 15000;
 
+<<<<<<< HEAD
 interface KiloSession {
   create(params: { body: Record<string, unknown>; signal?: AbortSignal }): Promise<{ error?: unknown; data?: { id: string } }>;
   abort(params: { path: { id: string } }): Promise<void>;
@@ -123,10 +129,18 @@ function nodeFetch(input: RequestInfo | URL, init?: RequestInit, agent?: http.Ag
     }
   });
 }
+=======
+/**
+ * MCP 配置提供者：返回 vault/.kilocode/mcp.json 的 mcp 字段内容（SDK Config.mcp 格式）。
+ * 读取失败时应 resolve null（不影响 serve 启动）。
+ */
+export type McpConfigProvider = () => Promise<Record<string, unknown> | null>;
+>>>>>>> 867107b (feat: Phase 3 §5.3 — MCP path A passthrough to kilo serve with real status query)
 
 export class KiloCodeChatRuntime implements ChatRuntime {
   private binaryManager: BinaryManager;
   private getSettings: () => KiloCodeSettings;
+  private mcpConfigProvider: McpConfigProvider | null;
   private serverHandle: { url: string; close(): void } | null = null;
   private startPromise: Promise<void> | null = null;
   private client: KiloClient | null = null;
@@ -141,15 +155,19 @@ export class KiloCodeChatRuntime implements ChatRuntime {
 
   readonly eventBuffer = new EventBuffer();
 
-  constructor(binaryManager: BinaryManager, getSettings: () => KiloCodeSettings) {
+  constructor(binaryManager: BinaryManager, getSettings: () => KiloCodeSettings, mcpConfigProvider?: McpConfigProvider | null) {
     this.binaryManager = binaryManager;
     this.getSettings = getSettings;
+<<<<<<< HEAD
     this.httpAgent = new http.Agent({
       keepAlive: true,
       keepAliveMsecs: 30000,
       maxSockets: 1,
     });
     this.boundFetch = (input, init) => nodeFetch(input, init, this.httpAgent);
+=======
+    this.mcpConfigProvider = mcpConfigProvider ?? null;
+>>>>>>> 867107b (feat: Phase 3 §5.3 — MCP path A passthrough to kilo serve with real status query)
   }
 
   async start(vaultPath?: string): Promise<void> {
@@ -353,16 +371,46 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     process.env.PATH = pathDirs.join(pathSep);
     console.debug('[KiloCode] ensureServer: cliPath=' + cliPath + ' method=' + (typeof this.binaryManager.getDetectionMethod === 'function' ? this.binaryManager.getDetectionMethod() : 'unknown'));
 
+    // 路径 A：插件级 MCP 配置（vault/.kilocode/mcp.json）透传给 kilo serve（KILO_CONFIG_CONTENT）
+    let mcpConfig: Record<string, unknown> | null = null;
+    if (this.mcpConfigProvider) {
+      try {
+        mcpConfig = await this.mcpConfigProvider();
+      } catch (err) {
+        // MCP 配置读取失败不应阻塞 serve 启动
+        console.error('[KiloCode] Failed to read MCP config, starting serve without it:', err);
+      }
+    }
+
     this.serverHandle = await createKiloServer({
       hostname: '127.0.0.1',
       port: 0,
       timeout: SERVE_TIMEOUT,
+<<<<<<< HEAD
+=======
+      cors: ['app://obsidian.md'],
+      // mcp.json 是 JSON 文件内容（unknown），此处安全转换为 SDK Config 结构
+      ...(mcpConfig ? { config: { mcp: mcpConfig } as Config } : {}),
+>>>>>>> 867107b (feat: Phase 3 §5.3 — MCP path A passthrough to kilo serve with real status query)
     });
     this.client = createKiloClient({
       baseUrl: this.serverHandle.url,
       fetch: this.boundFetch,
       ...(vaultPath ? { directory: vaultPath } : {}),
     });
+  }
+
+  /** 查询 CLI 的 MCP server 真实状态（路径 A 下连接由 CLI 管理，插件只查询呈现） */
+  async getMcpStatus(): Promise<Record<string, { status: string; error?: string }>> {
+    await this.start();
+    if (!this.client) return {};
+    try {
+      const result = await (this.client.mcp as any).status({});
+      return (result?.data ?? {}) as Record<string, { status: string; error?: string }>;
+    } catch (err) {
+      console.error('[KiloCode] getMcpStatus error:', err);
+      return {};
+    }
   }
 
   private buildModelConfig(): Record<string, unknown> {

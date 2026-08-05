@@ -186,6 +186,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `KiloCodeChatRuntime.ts.ensureServer()`: `createKiloClient` 未传入 `directory` 参数。修复：添加 `directory: vaultPath` 配置项。
   - `KiloCodeChatRuntime.ts.sendMessage()`: 预热场景下客户端在 vault 路径已知前已创建。修复：支持动态更新客户端配置（`applyVaultPathToClient`），通过 `setConfig` 注入 `x-kilo-directory` 请求头。
 
+### Added (Phase 3 功能补齐 — MCP 路径 A 透传 §5.3)
+
+- **PoC 结论**: 验证 `@kilocode/sdk` 的 `createKiloServer({ config })` 将 `config.mcp` 经 `KILO_CONFIG_CONTENT` 环境变量注入 `kilo serve`（含 `mergeConfig` 深度合并 mcp）；SDK `Event` 联合类型**无 `mcp.server.changed` 事件** → 状态呈现改用 `client.mcp.status()` API（返回各 server 的 connected/disabled/failed+error/needs_auth 真实状态）
+- **MCPManager 重构为「配置容器 + 状态查询」层**: 删除假连接（`connected = true`）与 `callTool` TODO；新增 `setConfigs/getConfigs/removeConfig`（SDK `Config.mcp` 格式：type/command[]/environment/enabled/timeout）与 `applyStatus()`（映射 CLI 真实状态，不在状态表 = disconnected，未知 key 忽略）；`getServers()` 合并配置与真实状态
+- **Runtime MCP 注入**: `KiloCodeChatRuntime` 新增可选 `mcpConfigProvider` 构造参数，`ensureServer()` 读取 `vault/.kilocode/mcp.json` 的 mcp 字段透传给 `kilo serve`（读取失败降级为不带 MCP 启动，不阻塞）；新增 `getMcpStatus()` 查询 CLI 真实状态
+- **接线**: `createKilocodeRegistration` 透传 provider；`main.ts` 提供 `mcpConfigProvider`（读 `.kilocode/mcp.json`，容错）
+- **MentionService**: mcp-server 项只列 `connected: true` 的真实已连接 server（类型新增 `connected?: boolean`）
+- **删除死代码**: `MCPToolAdapter`（无生产引用；路径 A 下工具调用由 CLI 内部完成，插件层无需工具适配/调用）
+
 ### Added (Phase 3 功能补齐 — i18n / Slash / 设置项)
 
 - **i18n 全链路接入（§5.1）**: 

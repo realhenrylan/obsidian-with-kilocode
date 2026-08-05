@@ -242,7 +242,7 @@ describe('MentionService', () => {
     test('MCP 服务器与子代理通过 context 返回', async () => {
       const service = new MentionService(createMockApp([], []));
       const results = await service.search('git', {
-        mcpServers: [{ id: 'github', name: 'GitHub MCP', description: 'GitHub tools' }],
+        mcpServers: [{ id: 'github', name: 'GitHub MCP', description: 'GitHub tools', connected: true }],
         subagents: [{ id: 'reviewer', name: 'Git Reviewer' }],
       });
 
@@ -255,6 +255,21 @@ describe('MentionService', () => {
       expect(results.every(r => r.type === 'file' || r.type === 'folder')).toBe(true);
       expect(results.some(r => r.type === 'mcp-server')).toBe(false);
       expect(results.some(r => r.type === 'subagent')).toBe(false);
+    });
+
+    test('MCP 服务器只列真实已连接（connected: true）', async () => {
+      const service = new MentionService(createMockApp([], []));
+
+      const results = await service.search('git', {
+        mcpServers: [
+          { id: 'github', name: 'GitHub MCP', connected: true },
+          { id: 'legacy', name: 'Legacy MCP', connected: false },
+          { id: 'unknown', name: 'Unknown MCP' },
+        ],
+      });
+
+      const mcpItems = results.filter(r => r.type === 'mcp-server');
+      expect(mcpItems.map(i => i.name)).toEqual(['GitHub MCP']);
     });
   });
 

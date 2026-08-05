@@ -39,7 +39,10 @@ export class MentionService {
   }
 
   /** 搜索可提及的内容 */
-  async search(query: string, context?: MentionContext): Promise<MentionItem[]> {
+  async search(query: string, context?: {
+    mcpServers?: Array<{ id: string; name: string; description?: string; connected?: boolean }>;
+    subagents?: Array<{ id: string; name: string; description?: string }>;
+  }): Promise<MentionItem[]> {
     const results: MentionItem[] = [];
 
     // 先尝试前缀匹配
@@ -129,21 +132,25 @@ export class MentionService {
   /** 搜索 MCP Server */
   private searchMcpServers(
     query: string,
-    servers: Array<{ id: string; name: string; description?: string }>,
+    servers: Array<{ id: string; name: string; description?: string; connected?: boolean }>,
     prefixOnly: boolean
   ): MentionItem[] {
     const results: MentionItem[] = [];
+    const lowerQuery = query.toLowerCase();
+
     for (const server of servers) {
-      if (this.matches(server.name, query, prefixOnly)) {
-        results.push({
-          type: 'mcp-server',
-          name: server.name,
-          path: server.id,
-          icon: '🔌',
-          description: server.description,
-        });
-      }
+      // 只列真实已连接的；connected 由注入方从 CLI 状态查询
+      if (server.connected !== true) continue;
+      if (!this.matches(server.name, query, prefixOnly)) continue;
+      results.push({
+        type: 'mcp-server',
+        name: server.name,
+        path: server.id,
+        icon: '🔌',
+        description: server.description,
+      });
     }
+
     return results;
   }
 

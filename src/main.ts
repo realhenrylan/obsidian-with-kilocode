@@ -2,6 +2,7 @@
 
 import { Plugin, FileSystemAdapter, Notice, type WorkspaceLeaf } from 'obsidian';
 import * as path from 'path';
+import * as fs from 'fs';
 import { VIEW_TYPE_KILOCODE } from './core/types';
 import type { KiloCodeSettings } from './core/types';
 import type { ChatRuntime } from './core/providers/types';
@@ -91,8 +92,22 @@ export default class KiloCodePlugin extends Plugin {
       console.error('[KiloCode] Binary preload failed:', err);
     });
 
+    // 读取插件级 MCP 配置（vault/.kilocode/mcp.json 的 mcp 字段，SDK Config.mcp 格式），
+    // 由 runtime 透传给 kilo serve（路径 A：连接由 CLI 管理）。读取失败返回 null 不阻塞启动。
+    const mcpConfigProvider = async (): Promise<Record<string, unknown> | null> => {
+      try {
+        const mcpJsonPath = path.join(vaultPath, '.kilocode', 'mcp.json');
+        if (!fs.existsSync(mcpJsonPath)) return null;
+        const parsed = JSON.parse(fs.readFileSync(mcpJsonPath, 'utf8'));
+        return parsed && typeof parsed.mcp === 'object' && parsed.mcp !== null ? parsed.mcp : null;
+      } catch (err) {
+        console.error('[KiloCode] Failed to read .kilocode/mcp.json:', err);
+        return null;
+      }
+    };
+
     // 注册 Provider（传入 settings getter，确保 runtime 拿到最新的用户配置）
-    ProviderRegistry.register(createKilocodeRegistration(this.binaryManager, () => this.settings));
+    ProviderRegistry.register(createKilocodeRegistration(this.binaryManager, () => this.settings, mcpConfigProvider));
 
     // 注册视图
     this.registerView(

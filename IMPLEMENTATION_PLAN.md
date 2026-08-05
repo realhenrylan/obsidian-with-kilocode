@@ -766,6 +766,19 @@ Phase 3 完成后更新 Implemented 列表；Phase 5 完成后补充 `CONTRIBUTI
   - PUA 字符使 Edit 工具无法匹配，采用 Python 字节级替换（ASCII 方法签名锚点）
 - 后续遗留：Phase 3（功能补齐）——8 个 Red 测试已就绪；ViewActions 的 coming-soon 方法为 Phase 3 接入点
 
+### Phase 3（§5.3 MCP 路径 A 透传）— 完成 2026-08-05
+- 达成：
+  - **决策 PoC**：验证 `createKiloServer({ config })` 将 `config.mcp` 经 `KILO_CONFIG_CONTENT` 注入 `kilo serve`（SDK `mergeConfig` 深度合并 mcp）；`Event` 联合类型无 `mcp.server.changed` → 状态呈现改用 `client.mcp.status()`（connected/disabled/failed+error/needs_auth/needs_client_registration）
+  - MCPManager 重构为「配置容器 + 状态查询」层：删假连接与 callTool TODO，新增 setConfigs/getConfigs/removeConfig/applyStatus，getServers 合并真实状态
+  - Runtime 新增 mcpConfigProvider 注入（vault/.kilocode/mcp.json → serve 启动参数）+ getMcpStatus() 查询
+  - createKilocodeRegistration / main.ts 接线；MentionService mcp-server 只列 connected: true
+  - 删除死代码 MCPToolAdapter
+  - 全量 323 绿 / 0 Red、typecheck 0 error
+- 偏差：
+  - 计划假设的 `mcp.server.changed` 事件不存在（PoC 关键发现）→ 状态由轮询/按需 `client.mcp.status()` 提供，无推送订阅
+  - MCP 配置写入入口（设置 UI）未在本轮实现（无消费方），MCPManager 只承载读取 + 状态查询
+- 后续遗留：§5.4 Inline Edit、§5.5 剩余（temperature 透传 / chatViewPlacement）、Phase 4
+
 ### Phase 3（部分）— 完成 2026-08-05（§5.1 / §5.2 / §5.5 设置项）
 - 达成：
   - §5.1 i18n 全链路：`initI18n` 接入 main.onload、Locale 扩为 4 语言 + ja/ko 兜底词典、SettingsTab Language 下拉、全量 UI 文本 t() 化（KiloCodeView / MessageRenderer / SettingsTab 41 处 / ApprovalModal / InlineEditModal / ChatLayoutBuilder）
@@ -776,19 +789,7 @@ Phase 3 完成后更新 Implemented 列表；Phase 5 完成后补充 `CONTRIBUTI
 - 偏差：
   - `/compact` 的 summary 为占位文本（'Conversation history compacted'），AI 生成摘要留待后续
   - §5.1 文本替换覆盖主要 UI 面，Toolbar/Notice 等次要文本按计划分四批已基本完成，剩余零星硬编码在 Phase 5 清理
-- 后续遗留：§5.3 MCP（路径 A 透传，需 PoC 验证 `kilo serve` MCP 启动参数）、§5.4 Inline Edit、§5.5 剩余（temperature 透传 / chatViewPlacement）、Phase 4
-- 达成：
-  - KiloCodeView 从 1003 行拆至 632 行（-37%），新增 7 个组件：ModelSwitcherModal / ChatLayoutBuilder / TabBarView / SendOrchestrator / TabController / MessageActionsHandler / ViewActions，均通过 deps 回调注入解耦
-  - mojibake 注释全部人工重写为正确中文（含 PUA 私有区字符修复），`grep` 验证残留为 0
-  - 统一渲染路径：用户消息走 `MessageRenderer.appendUserMessage`（Markdown + 无操作按钮），工具调用走 `renderToolCallStreaming`/`appendToolResult`，View 旧渲染方法全部删除
-  - `restartRuntime` 真正 stop 进程（§4.4）；`handleTabClick` ChatState 同步补全（§4.5）
-  - KiloCodeView 中 `as any` = 0（对比提取前多处 `(this.app as any).Modal`）
-  - 全量 304 绿 / 8 预期 Red @phase3、typecheck 0 error；Phase 1 KiloCodeView 测试仅 3 处按计划 1.1 预言的断言更新（restartRuntime stop、ViewActions 迁移位置）
-- 偏差：
-  - **行数目标未达 <250**（实际 632）：计划 4.1 的 5 文件清单提取完成后行数仍远超 250，剩余代码为构造期依赖注入（~150 行）、生命周期与命令注册（~90 行）、事件注册（~120 行）、委托与 UI 状态（~120 行）。继续压缩需把 deps 工厂整体外置（createViewComponents），边际收益低、回归风险高，按 KISS 原则止步。职责边界已清晰，留待 Phase 5 清理期按需评估
-  - mojibake 恢复路径偏离：计划假设 GBK→Latin1→UTF-8 标准链，实测文件含 PUA 私有区字符（GBK 字节映射到 U+E000-U+F8FF），iconv 双链与 8 编码暴力搜索均不可逆，改为全人工重写（计划 4.2 步骤 3 的主路径）
-  - PUA 字符使 Edit 工具无法匹配，采用 Python 字节级替换（ASCII 方法签名锚点）
-- 后续遗留：Phase 3（功能补齐）——8 个 Red 测试已就绪；ViewActions 的 coming-soon 方法为 Phase 3 接入点
+- 后续遗留：§5.4 Inline Edit、§5.5 剩余（temperature 透传 / chatViewPlacement）、Phase 4
 
 ```
 模板：

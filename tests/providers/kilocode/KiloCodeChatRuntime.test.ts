@@ -37,6 +37,7 @@ jest.mock('@kilocode/sdk/client', () => {
   const mockEventSubscribe = jest.fn().mockResolvedValue({
     stream: createMockEventStream(),
   });
+  const mockMcpStatus = jest.fn().mockResolvedValue({ data: {}, error: null });
 
   const mockKiloClient = {
     session: {
@@ -47,6 +48,9 @@ jest.mock('@kilocode/sdk/client', () => {
     },
     event: {
       subscribe: mockEventSubscribe,
+    },
+    mcp: {
+      status: mockMcpStatus,
     },
   };
 
@@ -177,6 +181,62 @@ describe('KiloCodeChatRuntime', () => {
 
     it('isStreaming returns correct state', () => {
       expect(runtime.isStreaming()).toBe(false);
+    });
+  });
+
+  describe('MCP integration (path A passthrough)', () => {
+    it('injects mcp config into kilo serve', async () => {
+      const mcpProvider = jest.fn().mockResolvedValue({
+        github: { type: 'local', command: ['npx', '-y', '@modelcontextprotocol/server-github'] },
+      });
+      runtime = new KiloCodeChatRuntime(mockBinaryManager, () => MOCK_SETTINGS, mcpProvider);
+
+      await runtime.start();
+
+      const { createKiloServer } = require('@kilocode/sdk/server');
+      expect(createKiloServer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: expect.objectContaining({
+            mcp: expect.objectContaining({
+              github: expect.objectContaining({ type: 'local' }),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('omits config when no mcp provider is wired', async () => {
+      await runtime.start();
+      const { createKiloServer } = require('@kilocode/sdk/server');
+      const callArgs = createKiloServer.mock.calls[0][0];
+      expect(callArgs.config).toBeUndefined();
+    });
+
+    it('starts serve even when mcp config read fails', async () => {
+      const mcpProvider = jest.fn().mockRejectedValue(new Error('file read failed'));
+      runtime = new KiloCodeChatRuntime(mockBinaryManager, () => MOCK_SETTINGS, mcpProvider);
+
+      await runtime.start();
+      const { createKiloServer } = require('@kilocode/sdk/server');
+      expect(createKiloServer).toHaveBeenCalledTimes(1);
+    });
+
+    it('getMcpStatus returns CLI mcp status map', async () => {
+      const { createKiloClient } = require('@kilocode/sdk/client');
+      const mockClient = createKiloClient();
+      mockClient.mcp.status.mockResolvedValue({
+        data: { github: { status: 'connected' }, broken: { status: 'failed', error: 'boom' } },
+        error: null,
+      });
+
+      await runtime.start();
+      const status = await runtime.getMcpStatus();
+
+      expect(status).toEqual({
+        github: { status: 'connected' },
+        broken: { status: 'failed', error: 'boom' },
+      });
+      expect(mockClient.mcp.status).toHaveBeenCalled();
     });
   });
 });
