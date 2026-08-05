@@ -1,12 +1,9 @@
-<<<<<<< HEAD
 // src/features/chat/KiloCodeView.ts
 // 針构：借鉴 claudian 架构，DOM 骨架坪创建一次，通过 updateUI() 更新内容
-// 解决�?1) 无法坑逝第二条消杯 (2) 切杢会话消杯消失 (3) 針坯坎无法坑�?
-=======
+// 解决�?1) 无法坑逝第二条消杯 (2) 切杢会话消杯消失 (3) 針坯坎无法坑�?
 ﻿// src/features/chat/KiloCodeView.ts
 // 重构：借鉴 claudian 架构，DOM 骨架只创建一次，通过 updateUI() 更新内容
 // 解决：1) 无法发送第二条消息 (2) 切换会话消息消失 (3) 重启后无法发送
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
 
 import { FileSystemAdapter, ItemView, MarkdownView, Notice, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_KILOCODE } from '../../core/types';
@@ -18,8 +15,6 @@ import { ConversationController } from './controllers/ConversationController';
 import { ConversationService } from './services/ConversationService';
 import { ChatState } from './state/ChatState';
 import { MessageRenderer } from './rendering/MessageRenderer';
-import { InlineEditModal } from '../inline-edit/InlineEditModal';
-import { DiffViewer } from '../inline-edit/DiffViewer';
 import { CLIErrorHandler } from '../../shared/ErrorNotice';
 import { PlanModeController } from './PlanModeController';
 import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
@@ -31,21 +26,17 @@ import { createDefaultCommandRegistry } from '../commands/SlashCommand';
 import { listCatalog } from '../../providers/kilocode/runtime/SkillCatalog';
 import { readCliModels, readCliMcpServers, readCliSubagents } from '../../core/cliConfigReader';
 
-<<<<<<< HEAD
-/** �?Tab 缓冲的浝弝状思（用于跨标签浝弝杢夝） */
+/** �?Tab 缓冲的浝弝状思（用于跨标签浝弝杢夝） */
 interface TabStreamingState {
   content: string;
   thinking: string;
   toolCalls: Map<string, ToolCallInfo>;
 }
-=======
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
 import { ApprovalManager } from '../../core/security/ApprovalManager';
 import { showApprovalModal } from '../../core/security/ApprovalModal';
 import { CurrentNoteContext } from './ui/CurrentNoteContext';
 import { FileAttachmentContext } from './ui/FileAttachmentContext';
 import { InputToolbar } from './ui/InputToolbar';
-<<<<<<< HEAD
 import { MentionService } from '../mention/MentionService';
 import type { MentionContext, MentionItem } from '../mention/MentionService';
 import { MentionDropdown } from '../mention/MentionDropdown';
@@ -55,7 +46,6 @@ import { VaultFileBrowserModal } from '../mention/VaultFileBrowserModal';
 import { ListSelectModal } from '../mention/ListSelectModal';
 import type { ListSelectItem } from '../mention/ListSelectModal';
 import { CustomInstructionModal } from './ui/CustomInstructionModal';
-=======
 import { openModelSwitcher } from './ui/ModelSwitcherModal';
 import { ChatLayoutBuilder } from './layout/ChatLayoutBuilder';
 import { TabBarView } from './tabs/TabBarView';
@@ -65,7 +55,7 @@ import { createDefaultCommandRegistry } from '../commands/SlashCommand';
 import { TabController } from './controllers/TabController';
 import { t } from '../../i18n';
 import { ViewActions } from './ui/ViewActions';
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
+import { runInlineEdit } from '../inline-edit/runInlineEdit';
 
 export class KiloCodeView extends ItemView {
   private plugin: KiloCodePlugin;
@@ -86,11 +76,8 @@ export class KiloCodeView extends ItemView {
   private slashActive = false;
   private activePalette: CommandPalette | null = null;
 
-<<<<<<< HEAD
-  // 挝久�?DOM 引用（骨架坪创建一次）
-=======
+  // 挝久�?DOM 引用（骨架坪创建一次）
   // 持久化 DOM 引用（框架只创建一次）
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private viewContainerEl: HTMLElement | null = null;
   private tabBarEl: HTMLElement | null = null;
   private messagesEl: HTMLElement | null = null;
@@ -103,7 +90,6 @@ export class KiloCodeView extends ItemView {
   private sendBtnEl: HTMLButtonElement | null = null;
   private tabBarView: TabBarView | null = null;
 
-<<<<<<< HEAD
   // @mention
   private mentionService: MentionService | null = null;
   private mentionDropdown: MentionDropdown | null = null;
@@ -113,11 +99,10 @@ export class KiloCodeView extends ItemView {
   // 标记 DOM 是坦已初始化
   private isLayoutBuilt = false;
 
-  // 浝弝坑逝者标�?ID（防止跨标签渲染�?
+  // 浝弝坑逝者标�?ID（防止跨标签渲染�?
   private senderTabId: string | null = null;
 
-  // 浝弝期间切杢标签支挝：按标签缓冲浝弝状�?+ 切杢中标�?
-=======
+  // 浝弝期间切杢标签支挝：按标签缓冲浝弝状�?+ 切杢中标�?
   // 标记 DOM 是否已初始化
   private isLayoutBuilt = false;
 
@@ -125,7 +110,6 @@ export class KiloCodeView extends ItemView {
   private senderTabId: string | null = null;
 
   // 流式期间切换标签支持：按标签缓冲流式状态 + 切换中标记
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private streamingStates: Map<string, TabStreamingState> = new Map();
   private isSwitchingTab = false;
 
@@ -166,20 +150,14 @@ export class KiloCodeView extends ItemView {
       }
     });
 
-<<<<<<< HEAD
-    // 设置审批处睆器（弹出 Modal�?
-=======
+    // 设置审批处睆器（弹出 Modal�?
     // 设置审批处理器（弹出 Modal）
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     this.approvalManager.setApprovalHandler(async (request) => {
       return showApprovalModal(this.app, request);
     });
 
-<<<<<<< HEAD
-    // 注入 ConversationController 回调（靿兝直接依�?DOM�?
-=======
+    // 注入 ConversationController 回调（靿兝直接依�?DOM�?
     // 注入 ConversationController 回调（避免直接依赖 DOM）
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     this.conversationController.onClearMessages(() => {
       this.messagesEl?.empty();
     });
@@ -261,6 +239,20 @@ export class KiloCodeView extends ItemView {
         modelSwitcher: { open: () => this.handleModelSwitch() },
         planModeController: this.planModeController,
       }),
+      // Inline Edit 真实实现：plan 模式调 CLI → diff 预览 → Accept 写入当前笔记
+      inlineEditRunner: (selectedText, instruction) => {
+        void runInlineEdit(
+          {
+            app: plugin.app,
+            vault: plugin.app.vault,
+            getRuntime: () => this.inputController.getRuntime(),
+            getActiveFile: () => plugin.app.workspace.getActiveFile(),
+            notice: (message) => new Notice(message),
+          },
+          selectedText,
+          instruction,
+        );
+      },
     });
   }
 
@@ -296,17 +288,14 @@ export class KiloCodeView extends ItemView {
       },
     });
 
-<<<<<<< HEAD
-    // 坪创建一�?DOM 骨架
+    // 坪创建一�?DOM 骨架
     this.buildLayout();
 
-    // 确保至少有一个标签页（首次打开时创建默认标签页�?
-=======
+    // 确保至少有一个标签页（首次打开时创建默认标签页�?
     // 只创建一次 DOM 骨架
     this.buildLayout();
 
     // 确保至少有一个标签页（首次打开时创建默认标签页）
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     let activeTab = this.tabManager.getActiveTab();
     if (!activeTab) {
       this.tabManager.createTab();
@@ -315,11 +304,8 @@ export class KiloCodeView extends ItemView {
       activeTab = this.tabManager.getActiveTab();
     }
 
-<<<<<<< HEAD
-    // 杢夝当剝会话的消�?
-=======
+    // 杢夝当剝会话的消�?
     // 恢复当前会话的消息
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     if (activeTab?.state.conversationId) {
       this.chatState.setConversationId(activeTab.state.conversationId);
       void this.conversationController.restoreConversation(activeTab.state.conversationId);
@@ -349,28 +335,22 @@ export class KiloCodeView extends ItemView {
     this.streamController.cancel();
     this.approvalManager.cancelAll();
     this.streamingStates.clear();
-<<<<<<< HEAD
     await this.tabManager.disposeAllRuntimes();
-=======
     // 通过 ConversationController 刷新待写入的会话数据
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     await this.conversationController.save();
     this.messageRenderer = null;
     this.isLayoutBuilt = false;
   }
 
   // ============================================
-<<<<<<< HEAD
   // DOM 骨架（坪创建一次）
   // ============================================
 
-  /** 创建 DOM 骨架，所有事件监坬器坪注册一�?*/
-=======
+  /** 创建 DOM 骨架，所有事件监坬器坪注册一�?*/
   // DOM 骨架（只创建一次）
   // ============================================
 
   /** 创建 DOM 骨架，所有事件监听器只注册一次 */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private buildLayout(): void {
     if (this.isLayoutBuilt) return;
 
@@ -386,18 +366,17 @@ export class KiloCodeView extends ItemView {
     this.sendBtnEl = refs.sendBtnEl;
     this.cancelBtnEl = refs.cancelBtnEl;
 
-<<<<<<< HEAD
     // 模弝切杢
     this.buildModeToggle(container);
 
-    // 标签�?
+    // 标签�?
     this.tabBarEl = container.createDiv({ cls: 'kilo-tab-bar' });
 
-    // 消杯区域（挝久化�?
+    // 消杯区域（挝久化�?
     this.messagesEl = container.createDiv({ cls: 'kilo-messages' });
     this.messageRenderer = new MessageRenderer(this.messagesEl, this.app, this);
 
-    // 工具�?
+    // 工具�?
     this.buildToolbar(container);
 
     // ????????????????
@@ -409,11 +388,10 @@ export class KiloCodeView extends ItemView {
     // ?????????
     this.buildInputArea(container);
 
-    // 擝作�?
+    // 擝作�?
     this.buildActionBar(container);
 
     // 注册消杯擝作事件委托（坪注册一次）
-=======
     // 消息渲染器（消息区域持久化）
     this.messageRenderer = new MessageRenderer(this.messagesEl, this.app, this);
 
@@ -436,7 +414,6 @@ export class KiloCodeView extends ItemView {
     this.registerActionBarEvents();
 
     // 消息操作事件委托（只注册一次）
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     this.registerMessageActionListeners();
 
     this.isLayoutBuilt = true;
@@ -445,19 +422,16 @@ export class KiloCodeView extends ItemView {
     this.updateUI();
   }
 
-<<<<<<< HEAD
   /** 创建模弝切杢 UI */
   private buildModeToggle(container: HTMLElement): void {
     this.modeToggleEl = container.createDiv({ cls: 'kilo-mode-toggle' });
     const modeBtn = this.modeToggleEl.createEl('button', { cls: 'kilo-mode-btn' });
     modeBtn.createSpan({ cls: 'kilo-mode-hint', text: ' (Shift+Tab)' });
-=======
   /** 注册模式切换按钮事件（按钮由 ChatLayoutBuilder 创建） */
   private registerModeToggleEvents(): void {
     if (!this.modeToggleEl) return;
     const modeBtn = this.modeToggleEl.querySelector('.kilo-mode-btn') as HTMLButtonElement;
     if (!modeBtn) return;
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     this.registerDomEvent(modeBtn, 'click', () => {
       this.planModeController.cycleMode();
       this.updateModeToggle();
@@ -465,21 +439,15 @@ export class KiloCodeView extends ItemView {
     this.updateModeToggle();
   }
 
-<<<<<<< HEAD
-  /** 更新模弝切杢按钮文本（丝針建 DOM�?*/
-=======
+  /** 更新模弝切杢按钮文本（丝針建 DOM�?*/
   /** 更新模式切换按钮文本（不重建 DOM） */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private updateModeToggle(): void {
     if (!this.modeToggleEl) return;
     const modeBtn = this.modeToggleEl.querySelector('.kilo-mode-btn') as HTMLButtonElement;
     if (!modeBtn) return;
     const currentMode = this.planModeController.getCurrentModeConfig();
-<<<<<<< HEAD
-    // 坪更新第一个文本节�?
-=======
+    // 坪更新第一个文本节�?
     // 只更新第一个文本节点
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     const firstChild = modeBtn.firstChild;
     if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
       firstChild.textContent = `${currentMode.icon} ${currentMode.name}`;
@@ -491,14 +459,11 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-<<<<<<< HEAD
-  /** 创建工具�?*/
+  /** 创建工具�?*/
   private buildToolbar(container: HTMLElement): void {
     const toolbarContainer = container.createDiv({ cls: 'kilo-toolbar-container' });
-=======
   /** 创建工具栏（按钮动作依赖 view 方法） */
   private buildToolbar(toolbarContainer: HTMLElement): void {
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     const inputToolbar = new InputToolbar(toolbarContainer);
     inputToolbar.setActions([
       {
@@ -510,13 +475,10 @@ export class KiloCodeView extends ItemView {
       {
         id: 'slash-command',
         icon: '/',
-<<<<<<< HEAD
         label: 'Slash command (/skills, /model, /mode, etc.)',
         handler: () => this.triggerSlashCommand(),
-=======
         label: 'Slash command',
         handler: () => this.viewActions.triggerSlashCommand(),
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
       },
       {
         id: 'instruction',
@@ -531,15 +493,12 @@ export class KiloCodeView extends ItemView {
         handler: () => this.viewActions.attachFile(),
       },
       {
-<<<<<<< HEAD
-=======
         id: 'attach-image',
         icon: '🖼️',
         label: 'Attach image',
         handler: () => void this.viewActions.handleAttachImage(),
       },
       {
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
         id: 'current-note',
         icon: '\uD83D\uDCDD',
         label: 'Include current note as context',
@@ -550,7 +509,6 @@ export class KiloCodeView extends ItemView {
     inputToolbar.render();
   }
 
-<<<<<<< HEAD
   /** 创建输入区域（textarea 事件监坬器坪注册一次） */
   private buildInputArea(container: HTMLElement): void {
     this.inputContainerEl = container.createDiv({ cls: 'kilo-input-container' });
@@ -561,7 +519,6 @@ export class KiloCodeView extends ItemView {
     });
 
     // keyboard events: delegate to category menu / mention dropdown first
-=======
   /** 注册输入区事件（textarea 事件监听器只注册一次，不会因 render() 丢失） */
   private registerInputEvents(): void {
     if (!this.textareaEl || !this.inputContainerEl) return;
@@ -585,7 +542,6 @@ export class KiloCodeView extends ItemView {
     });
 
     // 键盘事件（Enter 发送，Shift+Enter 换行）
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     this.registerDomEvent(this.textareaEl, 'keydown', (e) => {
       // category menu takes priority
       if (this.mentionCategoryMenu) {
@@ -612,23 +568,20 @@ export class KiloCodeView extends ItemView {
     });
   }
 
-<<<<<<< HEAD
-  /** 创建擝作�?*/
+  /** 创建擝作�?*/
   private buildActionBar(container: HTMLElement): void {
     this.actionBarEl = container.createDiv({ cls: 'kilo-action-bar' });
 
-    // 坑逝按�?
+    // 坑逝按�?
     this.sendBtnEl = this.actionBarEl.createEl('button', {
       cls: 'kilo-btn kilo-btn-primary',
       text: 'Send',
     });
-=======
   /** 注册操作栏按钮事件 */
   private registerActionBarEvents(): void {
     if (!this.sendBtnEl || !this.cancelBtnEl) return;
 
     // 发送按钮
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     this.registerDomEvent(this.sendBtnEl, 'click', () => {
       if (this.textareaEl) {
         void this.handleSend(this.textareaEl.value);
@@ -636,52 +589,42 @@ export class KiloCodeView extends ItemView {
       }
     });
 
-<<<<<<< HEAD
     // 坖消按钮
     this.cancelBtnEl = this.actionBarEl.createEl('button', {
       cls: 'kilo-btn kilo-btn-cancel',
       text: 'Cancel',
     });
     this.cancelBtnEl.style.display = 'none';
-=======
     // 取消按钮
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     this.registerDomEvent(this.cancelBtnEl, 'click', () => this.handleCancel());
   }
 
   // ============================================
-<<<<<<< HEAD
-  // UI 更新（丝销�?DOM，坪更新内容�?
+  // UI 更新（丝销�?DOM，坪更新内容�?
   // ============================================
 
-  /** 更新 UI：标签栝〝按钮状思（丝销�?DOM�?*/
-=======
+  /** 更新 UI：标签栝〝按钮状思（丝销�?DOM�?*/
   // UI 更新（不销毁 DOM，只更新内容）
   // ============================================
 
   /** 更新 UI：标签栏、按钮状态（不销毁 DOM） */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private updateUI(): void {
     this.updateTabBar();
     this.updateButtonStates();
   }
 
-<<<<<<< HEAD
-  /** 更新标签栝内�?*/
-=======
+  /** 更新标签栝内�?*/
   /** 更新标签栏内容 */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private updateTabBar(): void {
     if (!this.tabBarEl || !this.tabBarView) return;
 
-<<<<<<< HEAD
     // 清空标签栝内容（丝销毝整个容器）
     const tabsContainer = this.tabBarEl.querySelector('.kilo-tabs');
     if (tabsContainer) tabsContainer.remove();
     const addBtn = this.tabBarEl.querySelector('.kilo-tab-add');
     if (addBtn) addBtn.remove();
 
-    // 針建标签页列�?
+    // 針建标签页列�?
     const tabsEl = this.tabBarEl.createDiv({ cls: 'kilo-tabs' });
     const tabs = this.tabManager.getAllTabs();
     const activeTabId = this.tabManager.getActiveTab()?.id;
@@ -698,7 +641,7 @@ export class KiloCodeView extends ItemView {
       this.registerDomEvent(tabEl, 'click', () => void this.handleTabClick(tab.id));
     }
 
-    // 新建标签页按�?
+    // 新建标签页按�?
     if (this.tabManager.canCreateTab()) {
       const addBtnEl = this.tabBarEl.createDiv({
         cls: 'kilo-tab-add',
@@ -708,8 +651,7 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 更新按钮状思（坑�?坖消�?*/
-=======
+  /** 更新按钮状思（坑�?坖消�?*/
     this.tabBarView.render(
       this.tabManager.getAllTabs(),
       this.tabManager.getActiveTab()?.id ?? null,
@@ -722,7 +664,6 @@ export class KiloCodeView extends ItemView {
   }
 
   /** 更新按钮状态（发送/取消） */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private updateButtonStates(): void {
     const activeTab = this.tabManager.getActiveTab();
     const isStreaming = activeTab?.state.isStreaming ?? false;
@@ -742,29 +683,25 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-<<<<<<< HEAD
   /** 截断 ID 用于标签显示 */
   private truncateId(id: string): string {
     return id.length > 12 ? id.slice(0, 12) + '...' : id;
   }
 
   /** 隝机坠佝符杝示语 */
-=======
 
   /** 随机占位符提示语 */
   /** 随机占位符提示语（i18n 词典，避免硬编码） */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private getRandomPlaceholder(): string {
     const keys = ['chat.placeholder1', 'chat.placeholder2', 'chat.placeholder3', 'chat.placeholder4', 'chat.placeholder5'];
     return t(keys[Math.floor(Math.random() * keys.length)]);
   }
 
   // ============================================
-<<<<<<< HEAD
   // 消杯管睆
   // ============================================
 
-  /** 在消杯区域追加一条用户消�?*/
+  /** 在消杯区域追加一条用户消�?*/
   private appendUserMessage(content: string): void {
     if (!this.messagesEl) return;
 
@@ -792,7 +729,7 @@ export class KiloCodeView extends ItemView {
     this.scrollToBottom();
   }
 
-  /** 滚动到底�?*/
+  /** 滚动到底�?*/
   private scrollToBottom(): void {
     if (this.messagesEl) {
       this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
@@ -800,20 +737,20 @@ export class KiloCodeView extends ItemView {
   }
 
   // ============================================
-  // 标签页擝�?
+  // 标签页擝�?
   // ============================================
 
-  /** 处睆标签页点击（浝弝进行中也坯切杢，通过 TabStreamingState 杢夝渲染�?*/
+  /** 处睆标签页点击（浝弝进行中也坯切杢，通过 TabStreamingState 杢夝渲染�?*/
   private async handleTabClick(tabId: string): Promise<void> {
     this.isSwitchingTab = true;
     try {
       const tab = this.tabManager.switchTab(tabId);
       if (!tab) return;
 
-      // 保存当剝标签的蝉�?
+      // 保存当剝标签的蝉�?
       this.saveCurrentDraft();
 
-      // 通过 ConversationController 切杢会话（坫 save �?reset �?load �?render�?
+      // 通过 ConversationController 切杢会话（坫 save �?reset �?load �?render�?
       if (tab.state.conversationId) {
         await this.conversationController.switchTo(tab.state.conversationId);
       } else {
@@ -823,7 +760,7 @@ export class KiloCodeView extends ItemView {
       // 坌步 ChatState
       this.chatState.setConversationId(tab.state.conversationId ?? null);
 
-      // 如果目标标签有正在进行的浝，針建浝弝渲染状�?
+      // 如果目标标签有正在进行的浝，針建浝弝渲染状�?
       let recoveredFromState = false;
       if (tab.state.isStreaming) {
         const state = this.streamingStates.get(tabId);
@@ -880,19 +817,19 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 处睆新建标签�?*/
+  /** 处睆新建标签�?*/
   private handleNewTab(): void {
     if (this.tabManager.canCreateTab()) {
       this.saveCurrentDraft();
       this.tabManager.createTab();
-      // 通过 ConversationController 針置到空白状�?
+      // 通过 ConversationController 針置到空白状�?
       this.conversationController.createNew();
       this.restoreDraft('');
       this.updateUI();
     }
   }
 
-  /** 保存当剝标签的蝉稿消�?*/
+  /** 保存当剝标签的蝉稿消�?*/
   private saveCurrentDraft(): void {
     const activeTab = this.tabManager.getActiveTab();
     if (activeTab && this.textareaEl) {
@@ -900,7 +837,7 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 杢夝蝉稿消杯�?textarea */
+  /** 杢夝蝉稿消杯�?textarea */
   private restoreDraft(draft: string): void {
     if (this.textareaEl) {
       this.textareaEl.value = draft;
@@ -908,11 +845,10 @@ export class KiloCodeView extends ItemView {
   }
 
   // ============================================
-  // 坑逝消�?
+  // 坑逝消�?
   // ============================================
 
   /** 检查坑逝者标签是坦仝然活跃（防止跨标签渲染） */
-=======
   // 消息管理
   // ============================================
 
@@ -930,17 +866,13 @@ export class KiloCodeView extends ItemView {
   // ============================================
 
   /** 检查发送者标签是否仍然活跃（防止跨标签渲染） */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private isSenderTabActive(): boolean {
     if (!this.senderTabId) return false;
     return this.tabManager.getActiveTab()?.id === this.senderTabId;
   }
 
-<<<<<<< HEAD
-  /** 获坖或坯�?ChatRuntime */
-=======
+  /** 获坖或坯�?ChatRuntime */
   /** 获取或启动 ChatRuntime */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private async getOrCreateRuntime(): Promise<ChatRuntime | null> {
     const activeTab = this.tabManager.getActiveTab();
     if (!activeTab) return null;
@@ -974,10 +906,9 @@ export class KiloCodeView extends ItemView {
   }
 
   /**
-<<<<<<< HEAD
-   * 針坯 CLI 进程�?
+   * 針坯 CLI 进程�?
    * kilo serve 坪在坯动时读坖一次酝置文件，之坎修改 ~/.config/kilo/config.json
-   * 丝会自动生效。调用此方法坯以坜止当剝进程并让下一�?getOrCreateRuntime() 创建新进程�?
+   * 丝会自动生效。调用此方法坯以坜止当剝进程并让下一�?getOrCreateRuntime() 创建新进程�?
    */
   async restartRuntime(): Promise<void> {
     const activeTab = this.tabManager.getActiveTab();
@@ -985,7 +916,6 @@ export class KiloCodeView extends ItemView {
     if (runtime) {
       await runtime.stop();
       if (activeTab) activeTab.runtime = null;
-=======
    * 重启 CLI 进程。
    * kilo serve 只在启动时读取一次配置文件，之后修改 ~/.config/kilo/config.json
    * 不会自动生效。调用此方法可以停止当前进程并让下一次 getOrCreateRuntime() 创建新进程。
@@ -998,7 +928,6 @@ export class KiloCodeView extends ItemView {
         this.inputController.setRuntime(null);
       }
       new Notice('KiloCode runtime stopped. Next message starts a fresh CLI.');
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     }
     new Notice('KiloCode session reset. Next message will use new configuration.');
   }
@@ -1007,8 +936,7 @@ export class KiloCodeView extends ItemView {
     return activeView?.file?.path;
   }
 
-<<<<<<< HEAD
-  /** 处睆坑逝消�?*/
+  /** 处睆坑逝消�?*/
   private async handleSend(content: string): Promise<void> {
     if (!content.trim()) return;
 
@@ -1017,7 +945,7 @@ export class KiloCodeView extends ItemView {
 
     if (activeTab.state.isStreaming) return;
 
-    // 记录坑逝者标�?ID（在 try 外定义，�?catch/finally 使用�?
+    // 记录坑逝者标�?ID（在 try 外定义，�?catch/finally 使用�?
     const tabId = activeTab.id;
 
     try {
@@ -1032,7 +960,7 @@ export class KiloCodeView extends ItemView {
         toolCalls: new Map(),
       });
 
-      // 1. 确保会话存在（懒创建�?
+      // 1. 确保会话存在（懒创建�?
       const conversationId = await this.conversationController.ensureConversation();
       if (!activeTab.state.conversationId) {
         activeTab.setConversation(conversationId);
@@ -1060,10 +988,10 @@ export class KiloCodeView extends ItemView {
       };
       await this.conversationController.addMessage(userMessage);
 
-      // 3. 立坳�?UI 上显示用户消�?
+      // 3. 立坳�?UI 上显示用户消�?
       this.appendUserMessage(content);
 
-      // 4. 获坖 runtime 并坑�?
+      // 4. 获坖 runtime 并坑�?
       const runtime = await this.getOrCreateRuntime();
       if (!runtime) {
         new Notice('KiloCode CLI not available');
@@ -1080,11 +1008,11 @@ export class KiloCodeView extends ItemView {
         ...(this.appliedCustomInstructions ? { customInstructions: this.appliedCustomInstructions } : {}),
       });
 
-      // 5. 进入浝弝状�?
+      // 5. 进入浝弝状�?
       activeTab.setStreaming(true);
       this.updateButtonStates();
 
-      // 创建空的助手消杯容器（浝弝渲染目标，仅当剝标签坳坑逝者时创建�?
+      // 创建空的助手消杯容器（浝弝渲染目标，仅当剝标签坳坑逝者时创建�?
       if (this.isSenderTabActive()) {
         this.messageRenderer?.addAssistantMessage();
       }
@@ -1099,7 +1027,7 @@ export class KiloCodeView extends ItemView {
           // 始终缓冲到标签状思（跨标签切杢时杢夝用）
           const state = this.streamingStates.get(tabId);
           if (state) state.content += text;
-          // 仅在活跃且丝在切杢中时增針渲�?
+          // 仅在活跃且丝在切杢中时增針渲�?
           if (!this.isSwitchingTab && this.isSenderTabActive()) {
             this.messageRenderer?.appendText(text);
           }
@@ -1144,15 +1072,15 @@ export class KiloCodeView extends ItemView {
       activeTab.setStreaming(false);
       this.updateButtonStates();
 
-      // 清睆浝状思缓�?
+      // 清睆浝状思缓�?
       this.streamingStates.delete(tabId);
 
-      // 浝完戝坎坚最�?Markdown 渲染（仅当坑逝者标签仝活跃时）
+      // 浝完戝坎坚最�?Markdown 渲染（仅当坑逝者标签仝活跃时）
       if (this.isSenderTabActive()) {
         this.messageRenderer?.finalizeMessage();
       }
 
-      // 6. 保存助手消杯到会�?
+      // 6. 保存助手消杯到会�?
       await this.conversationController.addMessage(assistantMessage);
 
       // 7. Auto-review: optionally review modified files using a separate runtime
@@ -1188,13 +1116,13 @@ export class KiloCodeView extends ItemView {
       this.streamingStates.delete(tabId);
       this.updateButtonStates();
     } finally {
-      // 确保 streaming 状思一定被針置（无论戝功〝异常〝或 cancel�?
+      // 确保 streaming 状思一定被針置（无论戝功〝异常〝或 cancel�?
       if (activeTab.state.isStreaming) {
         activeTab.setStreaming(false);
       }
       this.streamingStates.delete(tabId);
       this.updateButtonStates();
-      // 清除坑逝者标�?ID
+      // 清除坑逝者标�?ID
       this.senderTabId = null;
     }
   }
@@ -1208,7 +1136,6 @@ export class KiloCodeView extends ItemView {
   private async handleModelSwitch(): Promise<void> {
     const activeTab = this.tabManager.getActiveTab();
     const runtime = activeTab?.runtime;
-=======
   /** 处理发送消息（委托 SendOrchestrator 四段流程） */
   private async handleSend(content: string): Promise<void> {
     await this.sendOrchestrator.send(content);
@@ -1220,7 +1147,6 @@ export class KiloCodeView extends ItemView {
   
   private async handleModelSwitch(): Promise<void> {
     const runtime = this.inputController.getRuntime();
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
     const currentModel = this.plugin.settings.defaultModel || "";
     const result = (await openModelSwitcher(this.app, currentModel)) ?? "";
 
@@ -1235,13 +1161,12 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-<<<<<<< HEAD
   private renderToolCall(toolCall: ToolCallInfo): void {
     if (!this.messagesEl) return;
 
     let lastMessage = this.messagesEl.querySelector('.kilo-message:last-child');
     if (!lastMessage) {
-      // 如果没有消杯元素，创建一个助手消杯容�?
+      // 如果没有消杯元素，创建一个助手消杯容�?
       const msgEl = this.messagesEl.createDiv({ cls: 'kilo-message kilo-message-assistant' });
       msgEl.createDiv({ cls: 'kilo-message-content' });
       lastMessage = msgEl;
@@ -1264,7 +1189,7 @@ export class KiloCodeView extends ItemView {
     const toolEl = this.containerEl.querySelector(`[data-tool-id="${toolCallId}"]`);
     if (toolEl) {
       const statusEl = toolEl.querySelector('.kilo-tool-status');
-      if (statusEl) statusEl.textContent = '�?Done';
+      if (statusEl) statusEl.textContent = '�?Done';
     }
   }
 
@@ -1273,19 +1198,16 @@ export class KiloCodeView extends ItemView {
   // ============================================
 
   /** 处睆坖消 */
-=======
   // ============================================
   // ============================================
 
   /** 处理取消 */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private handleCancel(): void {
     const activeTab = this.tabManager.getActiveTab();
     activeTab?.runtime?.cancel();
     this.streamController.cancel();
   }
 
-<<<<<<< HEAD
   /** 处睆当剝笔记切杢 */
   private handleToggleCurrentNote(): void {
     this.currentNoteContext.toggle();
@@ -1502,7 +1424,7 @@ export class KiloCodeView extends ItemView {
     this.activePalette.show();
   }
 
-  /** 处睆选中的斜杠命�?*/
+  /** 处睆选中的斜杠命�?*/
   private async handleSlashCommand(cmd: import('../commands/SlashCommand').SlashCommand): Promise<void> {
     if (cmd.id === 'skill') {
       if (!this.activePalette) return;
@@ -1654,12 +1576,11 @@ export class KiloCodeView extends ItemView {
   /** 显示 Inline Edit 模思框 */
   private showInlineEditModal(selectedText: string, editor: any): void {
     new InlineEditModal(this.app, selectedText, async (instruction) => {
-      // TODO: 调用 KiloCode CLI 进行 inline edit（Phase B 实现�?
+      // TODO: 调用 KiloCode CLI 进行 inline edit（Phase B 实现�?
     }).open();
   }
 
-  /** 注册消杯擝作事件委托（事件冒泡杕�?rewind/fork/copy 按钮点击�?*/
-=======
+  /** 注册消杯擝作事件委托（事件冒泡杕�?rewind/fork/copy 按钮点击�?*/
 
 
 
@@ -1694,23 +1615,18 @@ export class KiloCodeView extends ItemView {
   }
 
   /** 注册消息操作事件委托（委托 MessageActionsHandler） */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private registerMessageActionListeners(): void {
     if (!this.messagesEl) return;
     this.messageActionsHandler.attach(this.messagesEl);
   }
 
-<<<<<<< HEAD
-  /** 回退到指定消�?*/
-=======
+  /** 回退到指定消�?*/
   /** 回退到指定消息（委托 MessageActionsHandler） */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private async handleRewind(messageId: string): Promise<void> {
     await this.messageActionsHandler.rewind(messageId);
   }
 
-<<<<<<< HEAD
-  /** 从指定消杯处 fork 新会�?*/
+  /** 从指定消杯处 fork 新会�?*/
   private async handleFork(messageId: string): Promise<void> {
     if (!this.tabManager.canCreateTab()) {
       new Notice('Maximum tabs reached. Close a tab first.');
@@ -1724,7 +1640,7 @@ export class KiloCodeView extends ItemView {
       const newTab = this.tabManager.createTab();
       newTab.setConversation(forked.id);
 
-      // 切杢�?fork 的会�?
+      // 切杢�?fork 的会�?
       await this.conversationController.switchTo(forked.id);
       this.chatState.setConversationId(forked.id);
       this.restoreDraft('');
@@ -1738,14 +1654,12 @@ export class KiloCodeView extends ItemView {
   }
 
   /** 夝制消杯内容到剪贴板 */
-=======
   /** 从指定消息处 fork 新会话（委托 MessageActionsHandler） */
   private async handleFork(messageId: string): Promise<void> {
     await this.messageActionsHandler.fork(messageId);
   }
 
   /** 复制消息内容到剪贴板（委托 MessageActionsHandler） */
->>>>>>> 91a4b7a (feat: execute IMPLEMENTATION_PLAN Phase 0-3 — docs alignment, test baseline, KiloCodeView decomposition, i18n/Slash/settings)
   private async handleCopy(messageId: string): Promise<void> {
     await this.messageActionsHandler.copy(messageId);
   }

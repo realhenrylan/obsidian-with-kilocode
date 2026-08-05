@@ -1,24 +1,32 @@
 import { App, Modal } from 'obsidian';
 import { t } from '../../i18n';
+import { DiffViewer } from './DiffViewer';
 
 /**
  * Inline Edit 模态框
  * 用户选中文本后弹出，输入编辑指令
+ * showDiff=true 时为 diff 预览模式：不渲染指令输入区，只展示 attachDiff 挂载的变更预览
  */
 export class InlineEditModal extends Modal {
   private selectedText: string;
   private onSubmit: (instruction: string) => void;
   private instruction: string = '';
+  private showDiff: boolean;
+  private onAcceptCb?: (newText: string) => void;
+  private onRejectCb?: () => void;
 
-  constructor(app: App, selectedText: string, onSubmit: (instruction: string) => void) {
+  constructor(app: App, selectedText: string, onSubmit: (instruction: string) => void, showDiff = false) {
     super(app);
     this.selectedText = selectedText;
     this.onSubmit = onSubmit;
+    this.showDiff = showDiff;
   }
 
   onOpen(): void {
     const { contentEl } = this;
     contentEl.addClass('kilo-inline-edit-modal');
+
+    if (this.showDiff) return;
 
     // 标题
     contentEl.createEl('h2', { text: t('editor.title') });
@@ -80,6 +88,33 @@ export class InlineEditModal extends Modal {
       this.onSubmit(this.instruction.trim());
       this.close();
     }
+  }
+
+  /** 注册 Accept 回调（diff 预览模式下用户接受修改时触发，参数为 AI 返回的新文本） */
+  onAccept(cb: (newText: string) => void): void {
+    this.onAcceptCb = cb;
+  }
+
+  /** 注册 Reject 回调 */
+  onReject(cb: () => void): void {
+    this.onRejectCb = cb;
+  }
+
+  /** 挂载 diff 预览（showDiff 模式下唯一内容区；DiffViewer 自带 Accept/Reject 按钮） */
+  attachDiff(originalText: string, newText: string): void {
+    const diffContainer = this.contentEl.createDiv();
+    const viewer = new DiffViewer(diffContainer, originalText, newText);
+    viewer.render();
+
+    diffContainer.addEventListener('diff-accepted', (e) => {
+      const detail = (e as CustomEvent).detail as { newText?: string } | undefined;
+      this.onAcceptCb?.(detail?.newText ?? newText);
+      this.close();
+    });
+    diffContainer.addEventListener('diff-rejected', () => {
+      this.onRejectCb?.();
+      this.close();
+    });
   }
 
   onClose(): void {

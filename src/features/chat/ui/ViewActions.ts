@@ -25,6 +25,8 @@ export interface ViewActionsDeps {
   notice: (message: string) => void;
   /** Slash 命令注册表（未注入时 slash 保持 coming-soon） */
   commandRegistry: CommandRegistry | null;
+  /** Inline Edit 执行器（KiloCodeView 注入 runInlineEdit 真实实现） */
+  inlineEditRunner: (selectedText: string, instruction: string) => void;
 }
 
 export class ViewActions {
@@ -45,11 +47,12 @@ export class ViewActions {
     });
   }
 
-  /** 显示 Inline Edit 模态框 */
+  /** 显示 Inline Edit 模态框：收集指令后交给 inlineEditRunner 执行 */
   private showInlineEditModal(selectedText: string, _editor: any): void {
-    new InlineEditModal(this.deps.app, selectedText, async (_instruction) => {
-      // TODO: 调用 KiloCode CLI 进行 inline edit（Phase B 实现）
-    }).open();
+    const modal = new InlineEditModal(this.deps.app, selectedText, (instruction) => {
+      this.deps.inlineEditRunner(selectedText, instruction);
+    });
+    modal.open();
   }
 
   /** 处理图片附件 */

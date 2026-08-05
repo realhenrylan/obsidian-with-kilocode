@@ -145,6 +145,14 @@
     "edit": "编辑",
     "cancel": "取消",
     "hint": "回车提交，Shift+Enter 换行，Esc 取消",
-    "placeholder": "描述如何编辑选中的文本..."
+    "placeholder": "描述如何编辑选中的文本...",
+    "diffTitle": "变更预览",
+    "accept": "接受修改",
+    "reject": "拒绝",
+    "noActiveFile": "没有打开的笔记，请先打开一个笔记",
+    "noRuntime": "KiloCode 运行时未就绪，请先开始一段对话",
+    "noChanges": "AI 未返回对选中文本的修改",
+    "applied": "修改已写入笔记",
+    "failed": "内联编辑失败：{{error}}"
   }
 }

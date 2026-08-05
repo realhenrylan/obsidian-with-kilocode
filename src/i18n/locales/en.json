@@ -145,6 +145,14 @@
     "edit": "Edit",
     "cancel": "Cancel",
     "hint": "Enter to submit, Shift+Enter for new line, Esc to cancel",
-    "placeholder": "Describe how to edit the selected text..."
+    "placeholder": "Describe how to edit the selected text...",
+    "diffTitle": "Changes Preview",
+    "accept": "Accept Changes",
+    "reject": "Reject",
+    "noActiveFile": "No active note. Open a note first.",
+    "noRuntime": "KiloCode runtime is not ready. Start a conversation first.",
+    "noChanges": "AI returned no changes for the selected text.",
+    "applied": "Changes applied to the note.",
+    "failed": "Inline edit failed: {{error}}"
   }
 }

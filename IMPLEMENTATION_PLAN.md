@@ -766,6 +766,17 @@ Phase 3 完成后更新 Implemented 列表；Phase 5 完成后补充 `CONTRIBUTI
   - PUA 字符使 Edit 工具无法匹配，采用 Python 字节级替换（ASCII 方法签名锚点）
 - 后续遗留：Phase 3（功能补齐）——8 个 Red 测试已就绪；ViewActions 的 coming-soon 方法为 Phase 3 接入点
 
+### Phase 3（§5.4 Inline Edit）— 完成 2026-08-05
+- 达成：
+  - `runInlineEdit` 真实实现：plan 模式提示词（只读、不写文件）→ 收集 AI 建议 → `InlineEditModal(showDiff)` + `DiffViewer` 预览 → Accept 写入 vault / Reject 取消
+  - InlineEditModal 扩展（showDiff / attachDiff / onAccept / onReject）；DiffViewer 首次被渲染并 i18n 化
+  - ViewActions.inlineEditRunner 桥接；KiloCodeView 注入全依赖；Ctrl+Shift+E 命令沿用
+  - 失败降级：无笔记 / runtime 未就绪 / AI 报错 / 空结果 → Notice 提示不打开 diff
+  - 新增 15 用例（runInlineEdit 7 + ViewActions 4 + InlineEditModal diff 模式 4），全量 338 绿 / typecheck 0 error
+- 偏差：
+  - plan mode 提示词为文本级约束（DO NOT write any files），未走 CLI 的 plan 权限模式（permissionMode 由 settings 控制）；用户全局 permissionMode=plan 时由 CLI 侧兜底只读
+- 后续遗留：§5.5 剩余（temperature 透传 / chatViewPlacement）、Phase 4
+
 ### Phase 3（§5.3 MCP 路径 A 透传）— 完成 2026-08-05
 - 达成：
   - **决策 PoC**：验证 `createKiloServer({ config })` 将 `config.mcp` 经 `KILO_CONFIG_CONTENT` 注入 `kilo serve`（SDK `mergeConfig` 深度合并 mcp）；`Event` 联合类型无 `mcp.server.changed` → 状态呈现改用 `client.mcp.status()`（connected/disabled/failed+error/needs_auth/needs_client_registration）

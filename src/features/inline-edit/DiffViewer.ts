@@ -2,6 +2,8 @@
  * Diff 查看器
  * 显示编辑前后的差异
  */
+import { t } from '../../i18n';
+
 export class DiffViewer {
   private container: HTMLElement;
   private originalText: string;
@@ -20,7 +22,7 @@ export class DiffViewer {
 
     // 标题
     const headerEl = this.container.createDiv({ cls: 'kilo-diff-header' });
-    headerEl.createSpan({ text: 'Changes Preview', cls: 'kilo-diff-title' });
+    headerEl.createSpan({ text: t('editor.diffTitle'), cls: 'kilo-diff-title' });
 
     // Diff 内容
     const diffEl = this.container.createDiv({ cls: 'kilo-diff-content' });
@@ -61,13 +63,13 @@ export class DiffViewer {
 
     const acceptBtn = actionsEl.createEl('button', {
       cls: 'kilo-btn kilo-btn-primary',
-      text: 'Accept Changes',
+      text: t('editor.accept'),
     });
     acceptBtn.addEventListener('click', () => this.onAccept());
 
     const rejectBtn = actionsEl.createEl('button', {
       cls: 'kilo-btn kilo-btn-cancel',
-      text: 'Reject',
+      text: t('editor.reject'),
     });
     rejectBtn.addEventListener('click', () => this.onReject());
   }

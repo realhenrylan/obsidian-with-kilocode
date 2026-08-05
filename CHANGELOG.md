@@ -186,6 +186,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `KiloCodeChatRuntime.ts.ensureServer()`: `createKiloClient` 未传入 `directory` 参数。修复：添加 `directory: vaultPath` 配置项。
   - `KiloCodeChatRuntime.ts.sendMessage()`: 预热场景下客户端在 vault 路径已知前已创建。修复：支持动态更新客户端配置（`applyVaultPathToClient`），通过 `setConfig` 注入 `x-kilo-directory` 请求头。
 
+### Added (Phase 3 功能补齐 — Inline Edit §5.4)
+
+- **`runInlineEdit` 真实实现**（`src/features/inline-edit/runInlineEdit.ts`）: plan 模式调 CLI（`buildInlineEditPrompt` 只读提示词，要求只返回替换文本、绝不写文件）→ 收集流式文本 → `InlineEditModal(showDiff)` + `DiffViewer` 渲染变更预览 → **Accept 写入当前笔记** / Reject 取消
+- **`InlineEditModal` 扩展**: 新增 `showDiff` 构造参数（diff 预览模式不渲染指令输入区）、`attachDiff(original, newText)`（挂载 DiffViewer 并监听 accept/reject）、`onAccept(cb)` / `onReject(cb)` 回调
+- **接线**: `ViewActions.showInlineEditModal` 提交指令 → `deps.inlineEditRunner`；`KiloCodeView` 注入 `runInlineEdit`（app/vault/getRuntime/getActiveFile/notice 全依赖注入）；Ctrl+Shift+E 命令沿用
+- **`DiffViewer` 启用**（此前从未被渲染）: 按钮与标题文本 i18n 化（`editor.diffTitle/accept/reject`）；新增 `editor.noActiveFile/noRuntime/noChanges/applied/failed` 通知文案（en/zh，ja/ko 走 en 兜底）
+- **失败降级**: 无活动笔记 / runtime 未就绪 / AI 报错 / 空结果 → 仅 Notice 提示，不打开 diff
+- 新增测试 15 用例（`runInlineEdit.test.ts` 7 + `ViewActions.test.ts` 4 + InlineEditModal diff 模式 4），全量 **338 绿** / typecheck 0 error
+
 ### Added (Phase 3 功能补齐 — MCP 路径 A 透传 §5.3)
 
 - **PoC 结论**: 验证 `@kilocode/sdk` 的 `createKiloServer({ config })` 将 `config.mcp` 经 `KILO_CONFIG_CONTENT` 环境变量注入 `kilo serve`（含 `mergeConfig` 深度合并 mcp）；SDK `Event` 联合类型**无 `mcp.server.changed` 事件** → 状态呈现改用 `client.mcp.status()` API（返回各 server 的 connected/disabled/failed+error/needs_auth 真实状态）
