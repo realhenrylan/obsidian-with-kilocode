@@ -1,3 +1,8 @@
+// src/features/commands/SlashCommand.ts
+// 斜杠命令定义与内置命令注册表
+// Phase 3 §5.2：handler 依赖通过 createDefaultCommandRegistry(deps) 注入，
+// 由调用方（KiloCodeView）在构造时传入真实控制器。
+
 import { Notice } from 'obsidian';
 import { listCatalog } from '../../providers/kilocode/runtime/SkillCatalog';
 
@@ -10,6 +15,20 @@ export interface SlashCommand {
   description: string;
   icon: string;
   handler: (args: string) => Promise<string | void>;
+}
+
+/**
+ * 内置命令依赖（由视图注入）
+ */
+export interface SlashCommandDeps {
+  conversationController: {
+    compact(keepRecent?: number): Promise<void>;
+    deleteCurrent(): Promise<void>;
+    createNew(): void;
+  };
+  settings: { compactKeepRecent: number };
+  modelSwitcher: { open(): Promise<void> };
+  planModeController: { cycleMode(): void };
 }
 
 /**
@@ -39,63 +58,77 @@ export class CommandRegistry {
   }
 }
 
-export function createDefaultCommandRegistry(): CommandRegistry {
+/** 空实现兜底：未注入依赖时 handler 不执行任何操作 */
+const noop = async (): Promise<void> => {};
+
+/** 创建默认命令注册表（deps 未提供时 handler 为空实现） */
+export function createDefaultCommandRegistry(deps?: Partial<SlashCommandDeps>): CommandRegistry {
   const registry = new CommandRegistry();
 
   registry.register({
     id: 'compact',
     name: '/compact',
     description: 'Compact conversation history',
-    icon: '\uD83D\uDCE6',
-    handler: async () => {
-      return 'Please compact the conversation history, keeping only the key context.';
-    },
+    icon: '📦',
+    handler: deps?.conversationController
+      ? async () => {
+          await deps!.conversationController!.compact(deps?.settings?.compactKeepRecent ?? 5);
+        }
+      : noop,
   });
 
   registry.register({
     id: 'clear',
     name: '/clear',
     description: 'Clear current conversation',
-    icon: '\uD83D\uDDD1\uFE0F',
-    handler: async () => {
-      return '/clear';
-    },
+    icon: '🗑️',
+    handler: deps?.conversationController
+      ? async () => {
+          await deps!.conversationController!.deleteCurrent();
+          deps!.conversationController!.createNew();
+        }
+      : noop,
   });
 
   registry.register({
     id: 'model',
-    name: '/model <name>',
-    description: 'Switch AI model (e.g. /model claude-sonnet-4)',
-    icon: '\uD83E\uDD16',
-    handler: async (args: string) => {
-      if (!args.trim()) {
-        new Notice('Usage: /model <model-id> (e.g. /model claude-sonnet-4)');
-        return;
-      }
-      return `/model ${args.trim()}`;
-    },
+    name: '/model',
+    description: 'Switch AI model',
+    icon: '🤖',
+    handler: deps?.modelSwitcher
+      ? async () => {
+          await deps!.modelSwitcher!.open();
+        }
+      : async () => {
+          new Notice('Model switcher not available in this context.');
+        },
   });
 
   registry.register({
     id: 'mode',
     name: '/mode <plan|code|ask>',
     description: 'Switch mode (plan/code/ask)',
-    icon: '\uD83D\uDD04',
-    handler: async (args: string) => {
-      const mode = args.trim().toLowerCase();
-      if (!['plan', 'code', 'ask'].includes(mode)) {
-        new Notice('Usage: /mode plan | /mode code | /mode ask');
-        return;
-      }
-      return `/mode ${mode}`;
-    },
+    icon: '🔄',
+    handler: deps?.planModeController
+      ? async () => {
+          deps!.planModeController!.cycleMode();
+        }
+      : async (args: string) => {
+          const mode = args.trim().toLowerCase();
+          if (!['plan', 'code', 'ask'].includes(mode)) {
+            new Notice('Usage: /mode plan | /mode code | /mode ask');
+            return;
+          }
+          return `/mode ${mode}`;
+        },
   });
 
+  // Remote-only commands (skills listing / activation)
   registry.register({
     id: 'skills',
     name: '/skills',
     description: 'List available skills',
-    icon: '\uD83C\uDF93',
+    icon: '🎓',
     handler: async () => {
       const catalog = listCatalog();
       const skillList = catalog.map(s => `- ${s.name}: ${s.summary}`).join('\n');
@@ -108,7 +141,7 @@ export function createDefaultCommandRegistry(): CommandRegistry {
     id: 'skill',
     name: '/skill <name>',
     description: 'Load a skill into context (e.g. /skill frontmatter)',
-    icon: '\uD83C\uDF93',
+    icon: '🎓',
     handler: async (args: string) => {
       const name = args.trim();
       if (!name) {

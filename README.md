@@ -22,7 +22,7 @@
   <a href="https://github.com/realhenrylan/obsidian-with-kilocode/releases"><img src="https://img.shields.io/github/v/release/realhenrylan/obsidian-with-kilocode?style=flat-square&color=FFB800" alt="Release"></a>
   <a href="https://github.com/realhenrylan/obsidian-with-kilocode/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
   <a href="https://github.com/realhenrylan/obsidian-with-kilocode/stargazers"><img src="https://img.shields.io/github/stars/realhenrylan/obsidian-with-kilocode?style=flat-square&color=FFB800" alt="Stars"></a>
-  <a href="https://github.com/realhenrylan/obsidian-with-kilocode/issues"><img src="https://img.shields.io/github/issues/realhenrylan/obsidian-with-kilocode?style=flat-square" alt="Issues"></a>
+  <a href="https://github.com/realhenrylan/obsidian-with-kilocode/issues"><img src="https://img.shields.io/github/issues/realhenrylan/obsidian-with-kilocode?style=flat-square&color=FFB800" alt="Issues"></a>
   <a href="https://obsidian.md/plugins?id=kilocode"><img src="https://img.shields.io/badge/Obsidian-Community%20Plugin-purple?style=flat-square&logo=obsidian" alt="Obsidian Plugin"></a>
 </p>
 
@@ -40,6 +40,26 @@ Managing an Obsidian knowledge base is hard. As notes pile up:
 I already use KiloCode CLI for coding. Now the same tool can help me manage my knowledge in Obsidian.
 
 **This plugin bridges my knowledge base with my AI tool.**
+
+| Feature | Description |
+|---------|-------------|
+| 🤖 **AI Chat Sidebar** | Chat with KiloCode AI directly in Obsidian's sidebar |
+| 📝 **Inline Edit** *Planned* | Select text + hotkey to edit notes with AI assistance |
+| 🔧 **Slash Commands** | Type `/` for reusable prompt templates |
+| 📎 **@mention** *Planned* | Type `@` to mention vault files, MCP servers, or subagents |
+| 📋 **Plan Mode** | Three modes: code, plan (read-only), ask (Q&A only) |
+| 💬 **Multi-Tab Chat** | Multiple chat tabs with conversation history |
+| 🔄 **Streaming Responses** | Real-time AI responses with interruption support |
+| 🧵 **Conversation Fork/Rewind** | Fork conversations at any message, rewind to previous states |
+| 📦 **Conversation Compaction** | Compress old messages into summaries to save context |
+| 🔌 **MCP Support** *Planned* | Connect external tools via Model Context Protocol |
+| 🖼️ **Image Attachments** | Paste, drag-drop, or pick images as chat context (5MB limit) |
+| 📄 **Current Note Context** | Toggle active note as AI context input |
+| 🛡️ **Permission System** *Implemented (partial)* | Yolo/Normal/Plan security modes with per-tool approval dialogs |
+| 🌍 **i18n** | Multi-language support (English, Chinese, Japanese, Korean, and more) |
+| 📦 **CLI Auto-Download** | Zero-config setup — CLI binary auto-downloads from npm on first use |
+
+> **Status legend**: Features marked *Planned* are documented for upcoming releases but not yet wired to the CLI (see [Roadmap](#-roadmap)). *Implemented (partial)* means the feature is functional in the UI but its end-to-end path is not yet verified.
 
 ---
 
@@ -173,6 +193,10 @@ KiloCode is a versatile toolkit. Here's how each tool helps manage your knowledg
 
 ## Quick Start
 
+> **No CLI installation required.** The plugin automatically downloads the platform-appropriate KiloCode CLI binary from npm on first use. If you already have `kilo` installed globally, it will be detected and used.
+>
+> **Note**: the CLI version is currently pinned to `7.3.1` (`PINNED_CLI_VERSION`), matching `@kilocode/sdk ^7.3.1`. Custom CLI versions are not yet supported; decoupling the pinned version is planned.
+
 **Prerequisites**: Obsidian v1.7.2+ (Desktop only)
 
 > **Zero config.** No CLI installation required — the plugin auto-downloads the KiloCode binary on first use. If you already have `kilo` installed globally or have config at `~/.config/kilo/kilo.jsonc`, the plugin detects and uses them automatically. Your API keys, model preferences, and agent settings carry over with zero extra setup.
@@ -221,6 +245,97 @@ Click the KiloCode icon in the ribbon (or `Command Palette → KiloCode: Open ch
 | **Inline Edit** | Select text → `Ctrl/Cmd+Shift+E` → enter instruction (AI call pending) |
 
 ### Permission Modes
+
+| Button | Action |
+|--------|--------|
+| `@` | Trigger @mention *(Planned — "coming soon" notice)* |
+| `/` | Trigger slash command |
+| 📝 | Instruction preset *(Planned — "coming soon" notice)* |
+| 📎 | Attach file *(Planned — "coming soon" notice)* |
+| 🖼️ | Attach image |
+| 📄 | Toggle current note as context |
+
+### Inline Edit
+
+> **Status: Planned** — the modal opens today, but the AI call and diff preview are not yet implemented (the callback is a `TODO`).
+
+1. Select text in a note
+2. Press `Ctrl/Cmd + Shift + E`
+3. Enter your editing instruction in the modal
+4. Review the diff preview (added lines in green, removed in red)
+5. Click **Accept** or **Reject**
+
+### Slash Commands
+
+> **Status: Planned** — the command palette appears, but `/compact /clear /model /mode` handlers are not yet implemented and currently show a "coming soon" notice.
+
+Type `/` in the input to see available commands. A command palette with keyboard navigation (Arrow/Enter/Escape) will appear:
+
+| Command | Description |
+|---------|-------------|
+| `/compact` | Compress conversation history — replaces old messages with a summary |
+| `/clear` | Clear current conversation |
+| `/model` | Switch AI model |
+| `/mode` | Switch mode (plan/code/ask) |
+
+### @mention
+
+> **Status: Planned** — the `@` dropdown is not yet implemented and currently shows a "coming soon" notice.
+
+Type `@` to trigger the mention dropdown, which searches across:
+
+| Type | Icon | Description |
+|------|------|-------------|
+| **Vault files** | 📄 | Include file content as AI context |
+| **Folders** | 📁 | Reference vault folders |
+| **MCP servers** | 🔌 | Connect external tools |
+| **Subagents** | 🤖 | Call other AI agents |
+
+Results are grouped by type with up to 20 matches returned.
+
+### Plan Mode
+
+Click the mode toggle button in the chat header or press `Shift+Tab` to cycle through modes:
+
+| Mode | Behavior |
+|------|----------|
+| **Code** | Full read/write access — AI can create and edit files |
+| **Plan** | Read-only — AI explores and designs without making changes |
+| **Ask** | Q&A only — AI answers questions without file access |
+
+The mode prefix is injected into each message, and the active mode is visually indicated in the UI.
+
+### Conversation Management
+
+Messages display action buttons on hover:
+
+- **⏪ Rewind** — Discard all messages after the selected message (with confirmation)
+- **🍴 Fork** — Create a new conversation starting from the selected message
+- **📋 Copy** — Copy message content to clipboard
+
+#### Compaction
+
+When conversations grow long, use `/compact` to replace old messages with a system summary, keeping the N most recent messages intact (configurable in settings, default: 5).
+
+### Image Attachments
+
+You can attach images to your messages in three ways:
+
+1. **File picker** — Click the image button in the toolbar
+2. **Clipboard paste** — Copy an image and paste (`Ctrl/Cmd+V`) into the input area
+3. **Drag & drop** — Drag an image file into the input area
+
+Images are previewed in a grid above the input box with individual remove buttons. Size limit: 5MB per image.
+
+### Current Note Context
+
+Toggle the current note context button in the toolbar to include your active note's content as context for the AI. The toggle state is visually indicated and persists within the session.
+
+### Permission System
+
+> **Status: Implemented (partial)** — `ApprovalManager` and the `ApprovalModal` are fully implemented, but the approval round-trip to the runtime (`sendApproval`) is not yet covered by end-to-end tests.
+
+Tool calls by the AI are governed by the selected permission mode:
 
 | Mode | Behavior |
 |------|----------|
@@ -282,7 +397,101 @@ See [ROADMAP.md](ROADMAP.md) for current progress and planned features.
 
 ---
 
-## Troubleshooting
+## 🛠️ Development
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/realhenrylan/obsidian-with-kilocode.git
+cd obsidian-kilocode
+
+# Install dependencies
+npm install
+
+# Start development mode (watch mode with esbuild)
+npm run dev
+
+# Build for production
+npm run build
+
+# Run tests
+npm test
+
+# Run linter
+npm run lint
+```
+
+### Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Development mode with esbuild watch |
+| `npm run build` | Production build |
+| `npm test` | Run all Jest tests |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run test:coverage` | Run tests with coverage report |
+| `npm run lint` | Run ESLint |
+| `npm run lint:fix` | Fix ESLint errors automatically |
+| `npm run typecheck` | TypeScript type check (`tsc --noEmit`) |
+
+### Testing
+
+The test suite covers:
+
+- **Unit tests**: ProviderRegistry, StreamController, InputController, TabManager, ConversationService, MessageRenderer, CommandRegistry, PlanModeController, MCPManager, KiloCodeChatRuntime, i18n, ApprovalManager, ImageContext, CurrentNoteContext, InputToolbar
+- **Integration tests**: Chat workflow (TabManager + StreamController + InputController + PlanModeController), conversation management (fork/rewind/compact/resume), streaming pipeline
+
+```bash
+# Run all tests
+npm test
+
+# Run with coverage
+npm run test:coverage
+```
+
+### i18n
+
+Adding a new language:
+
+1. Create `src/i18n/locales/{lang}.json` following the structure of `en.json`
+2. The i18n system auto-detects the locale and falls back to `en` for missing keys
+3. Translation keys use dot notation (e.g., `settings.cliPathDesc`) with `{{param}}` substitution
+
+### CI/CD
+
+- **CI** (`.github/workflows/ci.yml`): Runs on push/PR to main — typecheck → lint → build → test
+- **Release** (`.github/workflows/release.yml`): On tag `v*` — build → create GitHub Release with `main.js`, `manifest.json`, `styles.css`
+
+---
+
+## 📋 Roadmap
+
+- [x] Basic chat functionality
+- [x] Streaming responses with interruption
+- [x] Multi-tab support with state persistence
+- [x] Conversation management (CRUD, fork, rewind, compact, resume)
+- [ ] Inline edit with diff preview (modal opens; CLI call + diff preview pending)
+- [x] Slash commands with command palette
+- [ ] @mention (files, folders, MCP servers, subagents) (UI pending)
+- [x] Plan mode (code/plan/ask)
+- [ ] MCP server support (config parsed; connection to CLI pending)
+- [x] Permission system (yolo/normal/plan) with approval dialogs (end-to-end approval not yet verified)
+- [x] Image attachments (paste, drag-drop, file picker)
+- [x] Current note context toggle
+- [x] Input toolbar
+- [x] i18n (English, Chinese, Japanese, Korean)
+- [x] Virtual scrolling for large conversations
+- [x] Error handling with severity levels
+- [x] CLI binary auto-download (zero-config setup)
+- [x] Streaming performance optimization (rAF scroll throttle, debounced writes, SSE chunk merge)
+- [ ] Additional language support
+- [ ] Custom theme support
+- [ ] Plugin API for third-party extensions
+
+---
+
+## 🐛 Troubleshooting
 
 ### KiloCode CLI not found
 

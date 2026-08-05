@@ -18,11 +18,13 @@ describe('BinaryManager', () => {
 
   describe('getBinaryPath priority chain', () => {
     it('should return user-configured cliPath when set', async () => {
+      // 用真实存在的临时文件，避免依赖系统环境（Windows/CI 上 /custom/kilo 不存在，
+      // 会导致跳过 manual 分支并触发真实系统查找）
+      const customCli = path.join(tmpDir, 'custom-kilo');
+      fs.writeFileSync(customCli, 'fake-binary');
       const manager = new BinaryManager(tmpDir);
-      const customPath = path.join(tmpDir, 'custom-kilo');
-      fs.writeFileSync(customPath, 'fake-binary');
-      const result = await manager.getBinaryPath({ cliPath: customPath, mirrorUrl: '' } as any);
-      expect(result).toBe(customPath);
+      const result = await manager.getBinaryPath({ cliPath: customCli, mirrorUrl: '' } as any);
+      expect(result).toBe(customCli);
     });
 
     it('should return local binary when exists and version matches', async () => {

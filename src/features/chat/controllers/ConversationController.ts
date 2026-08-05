@@ -183,6 +183,35 @@ export class ConversationController {
   }
 
   // ============================================
+  // compact / deleteCurrent — 会话压缩与删除（Slash 命令用）
+  // ============================================
+
+  /**
+   * 压缩当前会话历史（Slash /compact 命令）
+   * summary 由调用方提供（当前为占位摘要，AI 生成摘要留待后续）
+   */
+  async compact(keepRecent: number = 5): Promise<void> {
+    const convId = this.state.currentConversationId;
+    if (!convId) {
+      throw new Error('No active conversation to compact');
+    }
+    await this.service.compactConversation(
+      convId,
+      'Conversation history compacted',
+      keepRecent,
+    );
+    await this.restoreConversation(convId);
+  }
+
+  /** 删除当前会话（Slash /clear 命令） */
+  async deleteCurrent(): Promise<void> {
+    const convId = this.state.currentConversationId;
+    if (!convId) return;
+    await this.service.deleteConversation(convId);
+    this.state.setConversationId(null);
+  }
+
+  // ============================================
   // getConversation — 获取当前会话
   // ============================================
 

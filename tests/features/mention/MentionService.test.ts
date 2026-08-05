@@ -12,8 +12,14 @@
 
 import { MentionService } from '../../../src/features/mention/MentionService';
 import type { MentionItem } from '../../../src/features/mention/MentionService';
-// TFolder 从 obsidian mock 获取，用于构建测试 fixture
-import { TFolder, TFile } from 'obsidian';
+
+jest.mock('obsidian', () => ({
+  App: class {},
+  TFile: class TFile {},
+  TFolder: class TFolder {},
+}));
+
+import { TFile, TFolder } from 'obsidian';
 
 /** 创建测试用的 App mock */
 function createMockApp(
@@ -119,6 +125,41 @@ describe('MentionService', () => {
     });
   });
 
+  describe('search() - 按类型返回文件与文件夹', () => {
+    const mockApp = createMockApp(
+      [
+        { name: 'Meeting Notes.md', path: 'Notes/Meeting Notes.md' },
+        { name: 'Project Plan.md', path: 'Projects/Project Plan.md' },
+      ],
+      [
+        { name: 'Notes', path: 'Notes' },
+        { name: 'Projects', path: 'Projects' },
+      ]
+    );
+
+    const service = new MentionService(mockApp as any);
+
+    test('搜索 "note" 应匹配文件与文件夹', async () => {
+      const results = await service.search('note');
+      expect(results.some(r => r.type === 'file' && r.name === 'Meeting Notes')).toBe(true);
+      expect(results.some(r => r.type === 'folder' && r.name === 'Notes')).toBe(true);
+    });
+  });
+
+  describe('search() - 大小写不敏感', () => {
+    const mockApp = createMockApp(
+      [{ name: 'README.md', path: 'README.md' }],
+      []
+    );
+
+    const service = new MentionService(mockApp as any);
+
+    test('搜索 "readme" 应匹配 README', async () => {
+      const results = await service.search('readme');
+      expect(results.some(r => r.name === 'README')).toBe(true);
+    });
+  });
+
   describe('search() - recursive folders', () => {
     const mockApp = createMockApp(
       [
@@ -198,6 +239,17 @@ describe('MentionService', () => {
       expect(file!.name).toBe('readme');
     });
 
+    test('MCP 服务器与子代理通过 context 返回', async () => {
+      const service = new MentionService(createMockApp([], []));
+      const results = await service.search('git', {
+        mcpServers: [{ id: 'github', name: 'GitHub MCP', description: 'GitHub tools' }],
+        subagents: [{ id: 'reviewer', name: 'Git Reviewer' }],
+      });
+
+      expect(results.some(r => r.type === 'mcp-server' && r.name === 'GitHub MCP')).toBe(true);
+      expect(results.some(r => r.type === 'subagent' && r.name === 'Git Reviewer')).toBe(true);
+    });
+
     test('when no context provided, only vault items returned', async () => {
       const results = await service.search('');
       expect(results.every(r => r.type === 'file' || r.type === 'folder')).toBe(true);
@@ -237,6 +289,18 @@ describe('MentionService', () => {
       const results = await bigService.search('');
       expect(results.length).toBeLessThanOrEqual(20);
     });
+
+    test('结果上限 20 条', async () => {
+      // 构造 30 个匹配文件（搜索 'a' 全部命中）
+      const files = Array.from({ length: 30 }, (_, i) => ({
+        basename: `File-${i}-a`,
+        path: `Notes/File-${i}-a.md`,
+      }));
+      const service = new MentionService(createMockApp(files, []));
+
+      const results = await service.search('a');
+      expect(results.length).toBeLessThanOrEqual(20);
+    });
   });
 
   describe('getFileContent()', () => {
@@ -254,6 +318,29 @@ describe('MentionService', () => {
     test('returns null for non-existent file', async () => {
       const content = await service.getFileContent('nonexistent.md');
       expect(content).toBeNull();
+    });
+
+    test('getFileContent 返回 TFile 内容', async () => {
+      const app = createMockApp([], []);
+      const service = new MentionService(app);
+
+      const file = new TFile();
+      (file as any).path = 'Notes/a.md';
+      app.vault.getAbstractFileByPath.mockReturnValue(file);
+      app.vault.read.mockResolvedValue('file content');
+
+      const content = await service.getFileContent('Notes/a.md');
+      expect(content).toBe('file content');
+      expect(app.vault.read).toHaveBeenCalledWith(file);
+    });
+
+    test('getFileContent 非 TFile 返回 null', async () => {
+      const app = createMockApp([], []);
+      const service = new MentionService(app);
+
+      app.vault.getAbstractFileByPath.mockReturnValue(null);
+
+      expect(await service.getFileContent('missing.md')).toBeNull();
     });
   });
 });

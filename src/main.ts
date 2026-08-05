@@ -14,6 +14,7 @@ import { KiloCodeSettingTab } from './features/settings/SettingsTab';
 import { readCliConfig, mergeCliConfigIntoSettings } from './core/cliConfigReader';
 import { createSkillWatcher, type SkillWatcher } from './providers/kilocode/runtime/SkillWatcher';
 import { listCatalog, installSkill } from './providers/kilocode/runtime/SkillCatalog';
+import { initI18n, type Locale } from './i18n';
 
 export default class KiloCodePlugin extends Plugin {
   settings: KiloCodeSettings = DEFAULT_SETTINGS;
@@ -68,6 +69,9 @@ export default class KiloCodePlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+
+    // 初始化 i18n：插件设置的语言优先，未设置时按系统语言检测
+    initI18n(this.settings.locale as Locale);
 
     // 读取本机 kilo CLI 配置文件，自动填充模型（不复制 API key）
     // 插件设置中已有的值优先，CLI 配置作为 fallback

@@ -1,4 +1,5 @@
 import { App, Modal } from 'obsidian';
+import { t } from '../../i18n';
 
 /**
  * Inline Edit 模态框
@@ -20,21 +21,21 @@ export class InlineEditModal extends Modal {
     contentEl.addClass('kilo-inline-edit-modal');
 
     // 标题
-    contentEl.createEl('h2', { text: 'Inline Edit' });
+    contentEl.createEl('h2', { text: t('editor.title') });
 
     // 选中文本预览
     const previewEl = contentEl.createDiv({ cls: 'kilo-preview' });
-    previewEl.createEl('label', { text: 'Selected Text:' });
+    previewEl.createEl('label', { text: t('editor.selectedText') });
     const preEl = previewEl.createEl('pre');
     preEl.createEl('code', { text: this.selectedText });
 
     // 指令输入
     const inputContainer = contentEl.createDiv({ cls: 'kilo-instruction-input' });
-    inputContainer.createEl('label', { text: 'Edit Instruction:' });
+    inputContainer.createEl('label', { text: t('editor.instruction') });
 
     const textarea = inputContainer.createEl('textarea', {
       cls: 'kilo-instruction-textarea',
-      placeholder: 'Describe how to edit the selected text...',
+      placeholder: t('editor.placeholder'),
     });
     textarea.addEventListener('input', (e) => {
       this.instruction = (e.target as HTMLTextAreaElement).value;
@@ -42,20 +43,20 @@ export class InlineEditModal extends Modal {
 
     // 快捷键提示
     const hintEl = contentEl.createDiv({ cls: 'kilo-hint' });
-    hintEl.createSpan({ text: 'Enter to submit, Shift+Enter for new line, Esc to cancel' });
+    hintEl.createSpan({ text: t('editor.hint') });
 
     // 按钮
     const buttonContainer = contentEl.createDiv({ cls: 'kilo-modal-buttons' });
 
     const submitBtn = buttonContainer.createEl('button', {
       cls: 'kilo-btn kilo-btn-primary',
-      text: 'Edit',
+      text: t('editor.edit'),
     });
     submitBtn.addEventListener('click', () => this.handleSubmit());
 
     const cancelBtn = buttonContainer.createEl('button', {
       cls: 'kilo-btn kilo-btn-cancel',
-      text: 'Cancel',
+      text: t('editor.cancel'),
     });
     cancelBtn.addEventListener('click', () => this.close());
 

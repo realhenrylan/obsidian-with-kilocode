@@ -2,6 +2,7 @@
 
 import type { Message, ToolCallInfo } from '../../../core/types';
 import { App, Component, MarkdownRenderer } from 'obsidian';
+import { t } from '../../../i18n';
 import { VirtualScroller } from '../../../shared/VirtualScroller';
 
 /**
@@ -70,7 +71,7 @@ export class MessageRenderer {
       const summary = this.currentThinkingEl.createEl('summary', {
         cls: 'kilo-thinking-summary',
       });
-      summary.createSpan({ cls: 'kilo-thinking-label', text: 'Thinking...' });
+      summary.createSpan({ cls: 'kilo-thinking-label', text: t('chat.thinking') });
       this.currentThinkingEl.createDiv({ cls: 'kilo-thinking-content' });
       // thinking 块插入到文本之前
       if (this.currentTextEl.firstChild) {
@@ -161,7 +162,7 @@ export class MessageRenderer {
     const headerEl = messageEl.createDiv({ cls: 'kilo-message-header' });
     headerEl.createSpan({
       cls: 'kilo-message-role',
-      text: message.role === 'user' ? 'You' : message.role === 'system' ? 'System' : 'KiloCode',
+      text: message.role === 'user' ? t('chat.roleYou') : message.role === 'system' ? t('chat.roleSystem') : t('chat.roleKiloCode'),
     });
     headerEl.createSpan({
       cls: 'kilo-message-time',
@@ -182,7 +183,7 @@ export class MessageRenderer {
         });
         summary.createSpan({
           cls: 'kilo-thinking-label',
-          text: `Thinking (${message.thinking.length} chars)`,
+          text: t('chat.thinkingChars', { count: String(message.thinking.length) }),
         });
         thinkingEl.createDiv({
           cls: 'kilo-thinking-content',
@@ -257,11 +258,11 @@ export class MessageRenderer {
 
       const copyBtn = activeDocument.createElement('button');
       copyBtn.className = 'kilo-code-copy';
-      copyBtn.textContent = 'Copy';
+      copyBtn.textContent = t('common.copy');
       copyBtn.addEventListener('click', () => {
         void navigator.clipboard.writeText(codeText).then(() => {
-          copyBtn.textContent = 'Copied!';
-          window.setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+          copyBtn.textContent = t('chat.copied');
+          setTimeout(() => { copyBtn.textContent = t('common.copy'); }, 2000);
         });
       });
       header.appendChild(copyBtn);
@@ -280,7 +281,7 @@ export class MessageRenderer {
     const rewindBtn = actionsEl.createEl('button', {
       cls: 'kilo-action-btn',
       text: '⏪',
-      title: 'Rewind to here',
+      title: t('chat.actionRewind'),
     });
     (rewindBtn as HTMLElement).dataset.action = 'rewind';
     (rewindBtn as HTMLElement).dataset.messageId = messageId;
@@ -288,7 +289,7 @@ export class MessageRenderer {
     const forkBtn = actionsEl.createEl('button', {
       cls: 'kilo-action-btn',
       text: '🍴',
-      title: 'Fork from here',
+      title: t('chat.actionFork'),
     });
     (forkBtn as HTMLElement).dataset.action = 'fork';
     (forkBtn as HTMLElement).dataset.messageId = messageId;
@@ -296,7 +297,7 @@ export class MessageRenderer {
     const copyBtn = actionsEl.createEl('button', {
       cls: 'kilo-action-btn',
       text: '📋',
-      title: 'Copy',
+      title: t('chat.actionCopy'),
     });
     (copyBtn as HTMLElement).dataset.action = 'copy';
     (copyBtn as HTMLElement).dataset.messageId = messageId;
@@ -307,6 +308,8 @@ export class MessageRenderer {
     const toolEl = container.createDiv({
       cls: `kilo-tool kilo-tool-${toolCall.status}`,
     });
+    // 供 appendToolResult 定位更新
+    toolEl.setAttribute('data-tool-id', toolCall.id);
 
     const headerEl = toolEl.createDiv({ cls: 'kilo-tool-header' });
     headerEl.createSpan({
@@ -346,23 +349,71 @@ export class MessageRenderer {
 
   private getToolDisplayName(toolName: string): string {
     const names: Record<string, string> = {
-      read_file: 'Read File',
-      write_file: 'Write File',
-      search: 'Search',
-      bash: 'Bash',
-      edit_file: 'Edit File',
+      read_file: t('tools.readFile'),
+      write_file: t('tools.writeFile'),
+      search: t('tools.search'),
+      bash: t('tools.bash'),
+      edit_file: t('tools.editFile'),
     };
     return names[toolName] || toolName;
   }
 
   private getStatusText(status: string): string {
     const texts: Record<string, string> = {
-      pending: '⏳ Pending',
-      running: '🔄 Running',
-      completed: '✅ Done',
-      error: '❌ Error',
+      pending: t('tools.pending'),
+      running: t('tools.running'),
+      completed: t('tools.completed'),
+      error: t('tools.error'),
     };
     return texts[status] || status;
+  }
+
+  // ============================================
+  // 统一渲染入口（用户消息 / 工具调用）
+  // ============================================
+
+  /** 渲染用户消息（header + Markdown，与助手一致；无操作按钮） */
+  appendUserMessage(content: string): HTMLElement {
+    const messageEl = this.container.createDiv({
+      cls: 'kilo-message kilo-message-user',
+      attr: { 'data-role': 'user' },
+    });
+    const headerEl = messageEl.createDiv({ cls: 'kilo-message-header' });
+    headerEl.createSpan({ cls: 'kilo-message-role', text: 'You' });
+    headerEl.createSpan({
+      cls: 'kilo-message-time',
+      text: new Date().toLocaleTimeString(),
+    });
+    const contentEl = messageEl.createDiv({ cls: 'kilo-message-content' });
+    if (content) {
+      const textEl = contentEl.createDiv({ cls: 'kilo-message-text' });
+      void MarkdownRenderer.renderMarkdown(content, textEl, '', this.component);
+      this.enhanceCodeBlocks(textEl);
+    }
+    this.scrollToBottom();
+    return messageEl;
+  }
+
+  /** 渲染工具调用卡片（流式阶段，追加到最后一条消息容器） */
+  renderToolCallStreaming(toolCall: ToolCallInfo): void {
+    let lastMessage = this.container.querySelector('.kilo-message:last-child') as HTMLElement | null;
+    if (!lastMessage) {
+      // 没有消息元素时创建助手消息容器
+      lastMessage = this.container.createDiv({ cls: 'kilo-message kilo-message-assistant' });
+      lastMessage.createDiv({ cls: 'kilo-message-content' });
+    }
+    let toolsEl = lastMessage.querySelector('.kilo-tools') as HTMLElement | null;
+    if (!toolsEl) toolsEl = lastMessage.createDiv({ cls: 'kilo-tools' });
+    this.renderToolCall(toolsEl, toolCall);
+  }
+
+  /** 更新工具调用结果状态（暴力定位 data-tool-id 更新） */
+  appendToolResult(toolCallId: string, _result: string): void {
+    const toolEl = this.container.querySelector(`[data-tool-id="${toolCallId}"]`);
+    if (toolEl) {
+      const statusEl = toolEl.querySelector('.kilo-tool-status');
+      if (statusEl) statusEl.textContent = this.getStatusText('completed');
+    }
   }
 
   /**

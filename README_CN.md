@@ -22,7 +22,7 @@
   <a href="https://github.com/realhenrylan/obsidian-with-kilocode/releases"><img src="https://img.shields.io/github/v/release/realhenrylan/obsidian-with-kilocode?style=flat-square&color=FFB800" alt="Release"></a>
   <a href="https://github.com/realhenrylan/obsidian-with-kilocode/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
   <a href="https://github.com/realhenrylan/obsidian-with-kilocode/stargazers"><img src="https://img.shields.io/github/stars/realhenrylan/obsidian-with-kilocode?style=flat-square&color=FFB800" alt="Stars"></a>
-  <a href="https://github.com/realhenrylan/obsidian-with-kilocode/issues"><img src="https://img.shields.io/github/issues/realhenrylan/obsidian-with-kilocode?style=flat-square" alt="Issues"></a>
+  <a href="https://github.com/realhenrylan/obsidian-with-kilocode/issues"><img src="https://img.shields.io/github/issues/realhenrylan/obsidian-with-kilocode?style=flat-square&color=FFB800" alt="Issues"></a>
   <a href="https://obsidian.md/plugins?id=kilocode"><img src="https://img.shields.io/badge/Obsidian-社区插件-purple?style=flat-square&logo=obsidian" alt="Obsidian Plugin"></a>
 </p>
 
@@ -40,6 +40,25 @@
 我有一个 AI 工具 KiloCode 在帮我写代码。现在同一个工具，在 Obsidian 里也能帮我管知识。
 
 **这个插件就是让它们在一起的桥梁。**
+
+| 功能 | 说明 |
+|------|------|
+| 🤖 **AI 聊天侧边栏** | 在 Obsidian 侧边栏中直接与 KiloCode AI 对话 |
+| 📝 **内联编辑** *Planned* | 选中文本 + 快捷键，AI 辅助编辑笔记并预览 diff |
+| 🔧 **斜杠命令** | 输入 `/` 使用可复用的提示模板（compact/clear/model/mode） |
+| 📎 **@提及** *Planned* | 输入 `@` 提及 Vault 文件、文件夹、MCP 服务器或子代理 |
+| 📋 **计划模式** | 三种模式：code（读写）、plan（只读）、ask（仅问答） |
+| 💬 **多标签页聊天** | 多个聊天标签页，支持会话历史持久化 |
+| 🔄 **流式响应** | 实时显示 AI 回复，支持中断取消 |
+| 🧵 **对话分支/回退** | 在任意消息处创建分支（fork），或回退到之前的对话状态 |
+| 📦 **对话压缩** | 将旧消息压缩为摘要，节省上下文窗口 |
+| 🔌 **MCP 支持** *Planned* | 通过 Model Context Protocol 连接外部工具 |
+| 🖼️ **图片附件** | 粘贴、拖拽或选择图片作为聊天上下文（单张 5MB 限制） |
+| 📄 **当前笔记上下文** | 一键切换将当前活跃笔记作为 AI 上下文 |
+| 🛡️ **权限系统** *Implemented (partial)* | Yolo/Normal/Plan 三种安全模式，支持逐次审批对话框 |
+| 🌍 **国际化** | 多语言支持（中文、英文、日文、韩文等） |
+
+> **状态图例**：标记为 *Planned* 的功能为规划中、尚未接入 CLI（见 [Roadmap](#-roadmap)）。*Implemented (partial)* 表示功能在 UI 层已实现，但端到端路径尚未验证。
 
 ---
 
@@ -171,6 +190,10 @@ KiloCode 是我手里的工具箱。每个工具怎么用在知识库管理上�
 
 ## 快速开始
 
+> **无需安装 CLI。** 插件首次使用时自动从 npm 下载对应平台的 KiloCode CLI 二进制；若系统已全局安装 `kilo` 也会自动检测并复用。
+>
+> **注意**：CLI 版本当前固定为 `7.3.1`（`PINNED_CLI_VERSION`），与 `@kilocode/sdk ^7.3.1` 保持一致。暂不支持自定义 CLI 版本，解除版本固定已在计划中。
+
 **前置要求**：Obsidian v1.7.2+（仅桌面端）
 
 > **零配置启动。** 无需手动安装 CLI — 插件首次使用时自动下载 KiloCode 二进制文件。如果你已全局安装 `kilo` 或已有 `~/.config/kilo/kilo.jsonc` 配置，插件自动检测使用。API 密钥、模型偏好、代理设置全部自动继承，零额外配置。
@@ -220,6 +243,97 @@ npm run build
 
 ### 权限模式
 
+| 按钮 | 动作 |
+|--------|--------|
+| `@` | 触发 @提及 *（Planned — 弹 "coming soon" 提示）* |
+| `/` | 触发斜杠命令 |
+| 📝 | 指令预设 *（Planned — 弹 "coming soon" 提示）* |
+| 📎 | 附加文件 *（Planned — 弹 "coming soon" 提示）* |
+| 🖼️ | 附加图片 |
+| 📄 | 切换当前笔记为上下文 |
+
+### 内联编辑
+
+> **状态：Planned** — 弹窗目前可以打开，但 AI 调用与 diff 预览尚未实现（回调为 `TODO`）。
+
+1. 在笔记中选中文本
+2. 按 `Ctrl/Cmd + Shift + E`
+3. 在弹窗中输入编辑指令
+4. 查看逐行 diff 预览（新增行绿色、删除行红色）
+5. 点击 **接受** 或 **拒绝**
+
+### 斜杠命令
+
+> **状态：Planned** — 命令面板可以弹出，但 `/compact /clear /model /mode` 的 handler 尚未实现，目前会弹出 "coming soon" 提示。
+
+在输入框中输入 `/` 查看可用命令。支持键盘导航的命令选择面板（方向键/回车/Esc）：
+
+| 命令 | 说明 |
+|------|------|
+| `/compact` | 压缩对话历史 — 将旧消息替换为摘要 |
+| `/clear` | 清空当前对话 |
+| `/model` | 切换 AI 模型 |
+| `/mode` | 切换模式（plan/code/ask） |
+
+### @提及
+
+> **状态：Planned** — `@` 下拉菜单尚未实现，目前会弹出 "coming soon" 提示。
+
+输入 `@` 触发提及下拉菜单，支持搜索以下内容：
+
+| 类型 | 图标 | 说明 |
+|------|------|------|
+| **Vault 文件** | 📄 | 将文件内容作为 AI 上下文 |
+| **文件夹** | 📁 | 引用 Vault 中的文件夹 |
+| **MCP 服务器** | 🔌 | 连接外部工具 |
+| **子代理** | 🤖 | 调用其他 AI 代理 |
+
+结果按类型分组显示，最多返回 20 个匹配项。
+
+### 计划模式
+
+点击聊天顶部的模式切换按钮或按 `Shift+Tab` 循环切换模式：
+
+| 模式 | 行为 |
+|------|------|
+| **Code** | 完全读写权限 — AI 可创建和编辑文件 |
+| **Plan** | 只读 — AI 仅探索和设计，不做任何修改 |
+| **Ask** | 仅问答 — AI 回答问题，不访问文件 |
+
+模式前缀会自动注入到每条消息中，当前活跃模式在界面中有视觉指示。
+
+### 对话管理
+
+每条消息悬停时显示操作按钮：
+
+- **⏪ 回退** — 丢弃选中消息之后的所有对话（需确认）
+- **🍴 分支** — 从选中消息处创建新的对话分支
+- **📋 复制** — 复制消息内容到剪贴板
+
+#### 压缩
+
+当对话过长时，使用 `/compact` 命令将旧消息替换为系统摘要，保留最近的 N 条消息不变（可在设置中配置，默认 5 条）。
+
+### 图片附件
+
+支持三种方式附加图片：
+
+1. **文件选择器** — 点击工具栏中的图片按钮
+2. **剪贴板粘贴** — 复制图片后在输入区域按 `Ctrl/Cmd+V`
+3. **拖拽** — 将图片文件拖入输入区域
+
+图片预览显示在输入框上方的网格中，每张图片有独立的移除按钮。单张图片大小限制为 5MB。
+
+### 当前笔记上下文
+
+点击工具栏中的"当前笔记"按钮，切换是否将当前活跃笔记的内容作为 AI 上下文。切换状态有视觉指示，在会话期间保持。
+
+### 权限系统
+
+> **状态：Implemented (partial)** — `ApprovalManager` 与 `ApprovalModal` 已完整实现，但审批到 runtime 的往返（`sendApproval`）尚无端到端测试覆盖。
+
+AI 的工具调用受所选权限模式控制：
+
 | 模式 | 行为 |
 |------|------|
 | **Normal**（默认） | 读取工具自动放行，写入工具需要审批 |
@@ -234,7 +348,7 @@ npm run build
 
 | 分区 | 关键设置 |
 |------|----------|
-| 常规 | CLI 路径（自动检测）、自动启动 |
+| 常规 | CLI 路径（自动检测）、下载镜像 URL、自动启动 |
 | API | API Key、Base URL（留空则使用 CLI 存储的凭据） |
 | 聊天 | 最大标签页数（默认 3）、自动保存、压缩保留数（默认 5） |
 | 模型 | 默认模型（默认 `claude-sonnet-4-20250514`）、温度（默认 0.7） |
@@ -280,7 +394,101 @@ npm run build
 
 ---
 
-## 故障排除
+## 🛠️ 开发
+
+### 设置
+
+```bash
+# 克隆仓库
+git clone https://github.com/realhenrylan/obsidian-with-kilocode.git
+cd obsidian-kilocode
+
+# 安装依赖
+npm install
+
+# 启动开发模式（esbuild 监听模式）
+npm run dev
+
+# 生产构建
+npm run build
+
+# 运行测试
+npm test
+
+# 运行代码检查
+npm run lint
+```
+
+### 脚本命令
+
+| 脚本 | 说明 |
+|------|------|
+| `npm run dev` | 开发模式（esbuild 监听文件变化） |
+| `npm run build` | 生产构建 |
+| `npm test` | 运行所有 Jest 测试 |
+| `npm run test:watch` | 监听模式运行测试 |
+| `npm run test:coverage` | 运行测试并生成覆盖率报告 |
+| `npm run lint` | 运行 ESLint |
+| `npm run lint:fix` | 自动修复 ESLint 错误 |
+| `npm run typecheck` | TypeScript 类型检查（`tsc --noEmit`） |
+
+### 测试
+
+测试套件覆盖：
+
+- **单元测试**：ProviderRegistry、StreamController、InputController、TabManager、ConversationService、MessageRenderer、CommandRegistry、PlanModeController、MCPManager、KiloCodeChatRuntime、i18n、ApprovalManager、ImageContext、CurrentNoteContext、InputToolbar
+- **集成测试**：聊天工作流（TabManager + StreamController + InputController + PlanModeController）、会话管理（fork/rewind/compact/resume）、流式管道
+
+```bash
+# 运行所有测试
+npm test
+
+# 运行测试并查看覆盖率
+npm run test:coverage
+```
+
+### 国际化
+
+添加新语言：
+
+1. 在 `src/i18n/locales/{lang}.json` 创建翻译文件，参照 `zh.json` 的结构
+2. i18n 系统会自动检测语言，缺失的键会回退到英文
+3. 翻译键使用点号表示法（如 `settings.cliPathDesc`），支持 `{{param}}` 参数替换
+
+### CI/CD
+
+- **CI**（`.github/workflows/ci.yml`）：push/PR 到 main 时触发 — typecheck → lint → build → test
+- **发布**（`.github/workflows/release.yml`）：打 `v*` 标签时触发 — build → 创建 GitHub Release（包含 `main.js`、`manifest.json`、`styles.css`）
+
+---
+
+## 📋 路线图
+
+- [x] 基本聊天功能
+- [x] 流式响应与中断支持
+- [x] 多标签页支持与状态持久化
+- [x] 会话管理（CRUD、fork、rewind、compact、resume）
+- [ ] 内联编辑与 diff 预览（弹窗可打开；CLI 调用与 diff 预览待实现）
+- [x] 斜杠命令与命令选择面板
+- [ ] @提及（文件、文件夹、MCP 服务器、子代理）（UI 待实现）
+- [x] 计划模式（code/plan/ask）
+- [ ] MCP 服务器支持（配置可解析；连接 CLI 待实现）
+- [x] 权限系统（yolo/normal/plan）与审批对话框（端到端审批未验证）
+- [x] 图片附件（粘贴、拖拽、文件选择）
+- [x] 当前笔记上下文开关
+- [x] 输入工具栏
+- [x] 国际化（中文、英文、日文、韩语）
+- [x] 虚拟滚动优化长对话性能
+- [x] 分级错误处理
+- [x] CLI 自动下载（零配置安装）
+- [x] 流式响应性能优化（rAF 滚动节流、磁盘写入防抖、SSE chunk 合并）
+- [ ] 更多语言支持
+- [ ] 自定义主题支持
+- [ ] 第三方扩展插件 API
+
+---
+
+## 🐛 故障排除
 
 ### KiloCode CLI 未找到
 

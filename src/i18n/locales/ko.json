@@ -1,4 +1,5 @@
 {
+  "_note": "ko translations are placeholder (English fallback). Translate in Phase 5.",
   "common": {
     "ok": "OK",
     "cancel": "Cancel",
@@ -59,8 +60,6 @@
     "files": "Files",
     "folders": "Folders",
     "tags": "Tags",
-    "mcpServers": "MCP Servers",
-    "subagents": "Subagents",
     "noResults": "No results found"
   },
   "settings": {

@@ -1,5 +1,6 @@
 // src/core/security/ApprovalModal.ts
 import { App, Modal } from 'obsidian';
+import { t } from '../../i18n';
 import type { ApprovalRequest, ApprovalDecision } from './ApprovalManager';
 
 /**
@@ -22,7 +23,7 @@ export class ApprovalModal extends Modal {
 
     // 标题
     contentEl.createEl('h3', {
-      text: `🔧 Tool Approval: ${this.request.toolName}`,
+      text: `🔧 ${t('approval.title')}: ${this.request.toolName}`,
     });
 
     // 描述
@@ -42,7 +43,7 @@ export class ApprovalModal extends Modal {
 
     const allowBtn = buttonGroup.createEl('button', {
       cls: 'kilo-btn kilo-btn-primary',
-      text: 'Allow',
+      text: t('approval.allow'),
     });
     allowBtn.addEventListener('click', () => {
       this.resolve('allow');
@@ -51,7 +52,7 @@ export class ApprovalModal extends Modal {
 
     const allowAlwaysBtn = buttonGroup.createEl('button', {
       cls: 'kilo-btn kilo-btn-secondary',
-      text: 'Always Allow',
+      text: t('approval.alwaysAllow'),
     });
     allowAlwaysBtn.addEventListener('click', () => {
       this.resolve('allow-always');
@@ -60,7 +61,7 @@ export class ApprovalModal extends Modal {
 
     const denyBtn = buttonGroup.createEl('button', {
       cls: 'kilo-btn kilo-btn-danger',
-      text: 'Deny',
+      text: t('approval.deny'),
     });
     denyBtn.addEventListener('click', () => {
       this.resolve('deny');
@@ -69,7 +70,7 @@ export class ApprovalModal extends Modal {
 
     const cancelBtn = buttonGroup.createEl('button', {
       cls: 'kilo-btn kilo-btn-cancel',
-      text: 'Cancel',
+      text: t('approval.cancel'),
     });
     cancelBtn.addEventListener('click', () => {
       this.resolve('cancel');

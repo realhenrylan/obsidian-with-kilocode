@@ -4,6 +4,7 @@ import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import type { SettingDefinitionItem, SettingDefinitionGroup, SettingDefinitionRender } from 'obsidian';
 import type KiloCodePlugin from '../../main';
 import { readCliConfig, getCliConfigPath, cliHasApiKey } from '../../core/cliConfigReader';
+import { t, setLocale, type Locale } from '../../i18n';
 
 /**
  * KiloCode 设置面板
@@ -21,18 +22,18 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.addClass('kilo-settings');
 
-    new Setting(containerEl).setName('Configuration').setHeading();
+    containerEl.createEl('h2', { text: t('settings.title') });
 
     // === CLI 配置状态 ===
-    new Setting(containerEl).setName('CLI Configuration').setHeading();
+    containerEl.createEl('h3', { text: t('settings.cliConfigFile') });
     const cliConfig = readCliConfig();
     const configPath = getCliConfigPath();
     const hasApiKey = cliHasApiKey();
     new Setting(containerEl)
-      .setName('CLI Config File')
-      .setDesc(`Path: ${configPath}`)
+      .setName(t('settings.cliConfigFile'))
+      .setDesc(t('settings.cliConfigFileDesc', { path: configPath }))
       .addButton(btn => btn
-        .setButtonText('Reload CLI Config')
+        .setButtonText(t('settings.reloadCliConfig'))
         .onClick(() => {
           const updated = readCliConfig();
           if (updated.defaultModel) {
@@ -42,18 +43,18 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           //    由 CLI 子进程自己读取，避免 vault 云同步泄露
           void this.plugin.saveSettings();
           this.display();
-          new Notice('CLI config reloaded and applied');
+          new Notice(t('settings.cliConfigReloaded'));
         }));
 
     if (cliConfig.defaultModel) {
       containerEl.createDiv({
         cls: 'kilo-setting-note',
-        text: `CLI default model: ${cliConfig.defaultModel}${hasApiKey ? ' | API key: configured in CLI config' : ''}`,
+        text: t('settings.cliDefaultModel', { model: cliConfig.defaultModel }) + (hasApiKey ? t('settings.cliApiKeyConfigured') : ''),
       });
     } else {
       containerEl.createDiv({
         cls: 'kilo-setting-note',
-        text: 'No CLI config file found. Configure model and API key below or set up kilo CLI.',
+        text: t('settings.noCliConfig'),
       });
     }
 
@@ -61,15 +62,15 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     const vaultConfigDir = this.app.vault.configDir;
     containerEl.createDiv({
       cls: 'kilo-setting-warning',
-      text: `⚠️ If you enter an API key below, it will be stored in the vault plugin data file (${vaultConfigDir}/plugins/kilocode/data.json) and may be exposed if the vault is synced to cloud or Git. Prefer configuring the API key in kilo CLI config (~/.config/kilo/config.json) instead.`,
+      text: t('settings.apiKeyWarning'),
     });
 
     // === API 配置 ===
-    new Setting(containerEl).setName('API Configuration').setHeading();
+    containerEl.createEl('h3', { text: t('settings.apiKey') });
 
     new Setting(containerEl)
-      .setName('API Key')
-      .setDesc('Your AI provider API key (e.g. Anthropic, OpenAI)')
+      .setName(t('settings.apiKey'))
+      .setDesc(t('settings.apiKeyDesc'))
       .addText(text => {
         text.inputEl.type = 'password';
         text.inputEl.setCssStyles({ width: '100%' });
@@ -83,8 +84,8 @@ export class KiloCodeSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName('Base URL')
-      .setDesc('API base URL. Leave empty for default provider endpoint.')
+      .setName(t('settings.baseUrl'))
+      .setDesc(t('settings.baseUrlDesc'))
       .addText(text => text
         .setPlaceholder('https://api.anthropic.com')
         .setValue(this.plugin.settings.environmentVariables?.['KILO_BASE_URL'] || '')
@@ -101,11 +102,27 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     // === 常规设置 ===
-    new Setting(containerEl).setName('Basic').setHeading();
+    containerEl.createEl('h3', { text: t('settings.general') });
 
     new Setting(containerEl)
-      .setName('KiloCode CLI Path')
-      .setDesc('Path to KiloCode CLI executable. Leave empty for auto-detection.')
+      .setName(t('settings.language'))
+      .setDesc(t('settings.languageDesc'))
+      .addDropdown(dropdown => dropdown
+        .addOption('en', 'English')
+        .addOption('zh', '中文')
+        .addOption('ja', '日本語')
+        .addOption('ko', '한국어')
+        .setValue(this.plugin.settings.locale)
+        .onChange(async (value: string) => {
+          this.plugin.settings.locale = value as Locale;
+          setLocale(value as Locale);
+          await this.plugin.saveSettings();
+          new Notice(t('settings.languageChanged'));
+        }));
+
+    new Setting(containerEl)
+      .setName(t('settings.cliPath'))
+      .setDesc(t('settings.cliPathDesc'))
       .addText(text => text
         .setPlaceholder('kilo')
         .setValue(this.plugin.settings.cliPath)
@@ -114,23 +131,23 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }))
       .addButton(btn => btn
-        .setButtonText('Detect')
+        .setButtonText(t('settings.detect'))
         .setTooltip('Auto-detect KiloCode CLI on your system')
         .onClick(async () => {
           btn.setDisabled(true);
-          btn.setButtonText('Detecting...');
+          btn.setButtonText(t('settings.detect') + '...');
           try {
             const result = await this.plugin.binaryManager.autoDetect();
             if (result) {
               this.plugin.settings.cliPath = result.path;
               await this.plugin.saveSettings();
-              new Notice('KiloCode CLI detected: ' + result.path + ' (' + result.method + ')');
+              new Notice(t('settings.detected', { path: result.path, method: result.method }));
               this.display();
             } else {
-              new Notice('KiloCode CLI not found on your system. Download will be attempted automatically.');
+              new Notice(t('settings.notFound'));
             }
           } catch (err) {
-            new Notice('Detection failed: ' + (err instanceof Error ? err.message : String(err)));
+            new Notice(t('settings.detectionFailed', { error: err instanceof Error ? err.message : String(err) }));
           } finally {
             btn.setDisabled(false);
             btn.setButtonText('Detect');
@@ -138,8 +155,8 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName('Download Mirror URL')
-      .setDesc('Custom mirror URL for downloading CLI binary. Leave empty to use npm registry.')
+      .setName(t('settings.mirrorUrl'))
+      .setDesc(t('settings.mirrorUrlDesc'))
       .addText(text => text
         .setPlaceholder('https://registry.npmjs.org')
         .setValue(this.plugin.settings.mirrorUrl)
@@ -149,8 +166,8 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName('Auto Start')
-      .setDesc('Automatically start KiloCode CLI when opening a vault')
+      .setName(t('settings.autoStart'))
+      .setDesc(t('settings.autoStartDesc'))
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.autoStart)
         .onChange(async (value) => {
@@ -180,11 +197,11 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     // === 聊天设置 ===
-    new Setting(containerEl).setName('Chat').setHeading();
+    containerEl.createEl('h3', { text: t('settings.chat') });
 
     new Setting(containerEl)
-      .setName('Maximum Tabs')
-      .setDesc('Maximum number of chat tabs (1-10)')
+      .setName(t('settings.maxTabs'))
+      .setDesc(t('settings.maxTabsDesc'))
       .addSlider(slider => slider
         .setLimits(1, 10, 1)
         .setValue(this.plugin.settings.maxTabs)
@@ -194,8 +211,8 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName('Auto Save')
-      .setDesc('Automatically save conversation history')
+      .setName(t('settings.autoSave'))
+      .setDesc(t('settings.autoSaveDesc'))
       .addToggle(toggle => toggle
         .setValue(this.plugin.settings.autoSave)
         .onChange(async (value) => {
@@ -203,12 +220,24 @@ export class KiloCodeSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    new Setting(containerEl)
+      .setName(t('settings.compactKeepRecent'))
+      .setDesc(t('settings.compactKeepRecentDesc'))
+      .addSlider(slider => slider
+        .setLimits(1, 20, 1)
+        .setValue(this.plugin.settings.compactKeepRecent)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.compactKeepRecent = value;
+          await this.plugin.saveSettings();
+        }));
+
     // === 模型设置 ===
-    new Setting(containerEl).setName('Model').setHeading();
+    containerEl.createEl('h3', { text: t('settings.model') });
 
     new Setting(containerEl)
-      .setName('Default Model')
-      .setDesc('AI model override. Leave as "Use CLI default" to respect the CLI\'s own model configuration.')
+      .setName(t('settings.defaultModel'))
+      .setDesc(t('settings.defaultModelDesc'))
       .addDropdown(dropdown => dropdown
         .addOption('', 'Use CLI default')
         .addOption('claude-sonnet-4-20250514', 'Claude Sonnet 4')
@@ -221,8 +250,8 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName('Temperature')
-      .setDesc('Model temperature (0-1)')
+      .setName(t('settings.temperature'))
+      .setDesc(t('settings.temperatureDesc'))
       .addSlider(slider => slider
         .setLimits(0, 1, 0.1)
         .setValue(this.plugin.settings.temperature)
@@ -232,11 +261,11 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     // === 外观设置 ===
-    new Setting(containerEl).setName('Appearance').setHeading();
+    containerEl.createEl('h3', { text: t('settings.appearance') });
 
     new Setting(containerEl)
-      .setName('Theme')
-      .setDesc('Color theme for KiloCode')
+      .setName(t('settings.theme'))
+      .setDesc(t('settings.themeDesc'))
       .addDropdown(dropdown => dropdown
         .addOption('auto', 'Auto')
         .addOption('light', 'Light')
@@ -248,8 +277,8 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName('Font Size')
-      .setDesc('Font size for chat messages')
+      .setName(t('settings.fontSize'))
+      .setDesc(t('settings.fontSizeDesc'))
       .addSlider(slider => slider
         .setLimits(12, 20, 1)
         .setValue(this.plugin.settings.fontSize)
@@ -259,11 +288,11 @@ export class KiloCodeSettingTab extends PluginSettingTab {
         }));
 
     // === 安全设置 ===
-    new Setting(containerEl).setName('Security').setHeading();
+    containerEl.createEl('h3', { text: t('settings.permissionMode') });
 
     new Setting(containerEl)
-      .setName('Permission Mode')
-      .setDesc('Control how AI tool calls are approved')
+      .setName(t('settings.permissionMode'))
+      .setDesc(t('settings.permissionModeDesc'))
       .addDropdown(dropdown => dropdown
         .addOption('normal', 'Normal — approve write operations')
         .addOption('yolo', 'Yolo — auto-approve all operations')

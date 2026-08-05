@@ -1,0 +1,121 @@
+/**
+ * @jest-environment jsdom
+ */
+
+// tests/features/inline-edit/InlineEditModal.test.ts
+// 行为契约：输入指令回调、空输入拒绝、取消关闭
+
+import { InlineEditModal } from '../../../src/features/inline-edit/InlineEditModal';
+import { polyfillObsidianDOM } from '../../helpers/obsidianDom';
+
+let mockNoticeMessages: string[] = [];
+
+jest.mock('obsidian', () => {
+  class Modal {
+    app: any;
+    contentEl: HTMLElement;
+    isOpen = false;
+    constructor(app: any) {
+      this.app = app;
+      this.contentEl = document.createElement('div');
+    }
+    open() {
+      this.isOpen = true;
+      this.onOpen();
+    }
+    close() {
+      this.isOpen = false;
+      this.onClose();
+    }
+  }
+  class Notice {
+    message: string;
+    constructor(message: string, _timeout?: number) {
+      this.message = message;
+      mockNoticeMessages.push(message);
+    }
+  }
+  return { Modal, Notice };
+});
+
+describe('InlineEditModal', () => {
+  let modal: InlineEditModal;
+  let onSubmit: jest.Mock;
+
+  function openModal(selectedText = 'selected code', cb = onSubmit): InlineEditModal {
+    const m = new InlineEditModal({} as any, selectedText, cb);
+    m.open();
+    return m;
+  }
+
+  beforeAll(() => {
+    polyfillObsidianDOM();
+  });
+
+  beforeEach(() => {
+    onSubmit = jest.fn();
+  });
+
+  test('onOpen 渲染选中文本预览', () => {
+    modal = openModal('function foo() {}');
+    const codeEl = modal.contentEl.querySelector('pre code');
+    expect(codeEl).not.toBeNull();
+    expect(codeEl!.textContent).toBe('function foo() {}');
+  });
+
+  test('输入指令后回车提交回调', () => {
+    modal = openModal('old text');
+    const textarea = modal.contentEl.querySelector('.kilo-instruction-textarea') as HTMLTextAreaElement;
+
+    // 输入指令
+    textarea.value = 'refactor to arrow function';
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    // 按 Enter 提交
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(onSubmit).toHaveBeenCalledWith('refactor to arrow function');
+    expect(modal.isOpen).toBe(false);
+  });
+
+  test('空输入拒绝提交', () => {
+    modal = openModal('old text');
+    const textarea = modal.contentEl.querySelector('.kilo-instruction-textarea') as HTMLTextAreaElement;
+
+    textarea.value = '   ';
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(modal.isOpen).toBe(true);
+  });
+
+  test('点击 Edit 按钮提交回调', () => {
+    modal = openModal('old text');
+    const textarea = modal.contentEl.querySelector('.kilo-instruction-textarea') as HTMLTextAreaElement;
+    textarea.value = 'add comments';
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const editBtn = modal.contentEl.querySelector('.kilo-btn-primary') as HTMLButtonElement;
+    editBtn.click();
+
+    expect(onSubmit).toHaveBeenCalledWith('add comments');
+  });
+
+  test('点击 Cancel 按钮关闭但不提交', () => {
+    modal = openModal('old text');
+    const cancelBtn = modal.contentEl.querySelector('.kilo-btn-cancel') as HTMLButtonElement;
+    cancelBtn.click();
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(modal.isOpen).toBe(false);
+  });
+
+  test('Esc 键关闭', () => {
+    modal = openModal('old text');
+    const textarea = modal.contentEl.querySelector('.kilo-instruction-textarea') as HTMLTextAreaElement;
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(modal.isOpen).toBe(false);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});

@@ -186,6 +186,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `KiloCodeChatRuntime.ts.ensureServer()`: `createKiloClient` 未传入 `directory` 参数。修复：添加 `directory: vaultPath` 配置项。
   - `KiloCodeChatRuntime.ts.sendMessage()`: 预热场景下客户端在 vault 路径已知前已创建。修复：支持动态更新客户端配置（`applyVaultPathToClient`），通过 `setConfig` 注入 `x-kilo-directory` 请求头。
 
+### Added (Phase 3 功能补齐 — i18n / Slash / 设置项)
+
+- **i18n 全链路接入（§5.1）**: 
+  - `main.onload` 顶部调 `initI18n(settings.locale)`；`Locale` 类型扩为 `'en'|'zh'|'ja'|'ko'`，新增 `ja.json` / `ko.json`（en 兜底，Phase 5 校对）
+  - SettingsTab General 段新增 Language 下拉（4 语言），onChange → `setLocale + saveSettings + Notice 提示重开视图生效`
+  - 全量 UI 文本替换为 `t()`：ChatLayoutBuilder（Send/Cancel）、KiloCodeView（占位符 ×5 / responding）、MessageRenderer（Thinking/Copied/角色名/工具名/状态 ×14）、SettingsTab（41 处 name/desc）、ApprovalModal（6 处）、InlineEditModal（8 处）
+  - `detectLocale()` 支持 zh/ja/ko 系统语言检测
+- **Slash 命令接入（§5.2）**: 
+  - `createDefaultCommandRegistry(deps)` 支持依赖注入（conversationController / settings / modelSwitcher / planModeController），未注入时 handler 为空实现兜底
+  - 实现 4 个 handler：`/compact`（调 `conversationController.compact(keepRecent)`）、`/clear`（`deleteCurrent + createNew`）、`/model`（打开模型选择）、`/mode`（循环模式）
+  - `ConversationController` 新增 `compact()` / `deleteCurrent()` 方法
+  - ViewActions.triggerSlashCommand 真实实现：打开 CommandPalette 渲染命令列表，选中执行 handler；KiloCodeView 构造时注入注册表
+- **设置项补齐（§5.5）**: SettingsTab Chat 段新增 Compact Keep Recent slider（1-20）；Language 下拉（§5.1）；temperature 已存在于设置（CLI 透传见 Phase 4 评估）
+
+### Changed (Phase 2 架构重构)
+
+- **KiloCodeView 拆分（1003 → 632 行）**: 上帝类按职责拆为 7 个组件，View 仅保留 ItemView 生命周期、依赖注入与事件注册编排：
+  - `ui/ModelSwitcherModal.ts` — 从 `handleModelSwitch` 内嵌类提取，`openModelSwitcher()` 返回 `Promise<string|null>`，移除 `(this.app as any).Modal` 类型绕行
+  - `layout/ChatLayoutBuilder.ts` — 纯 DOM 骨架构建（build 静态方法返回关键元素引用），事件注册仍留 View（registerDomEvent 为 ItemView 方法）
+  - `tabs/TabBarView.ts` — 标签栏纯渲染（render + truncateId），事件回调注入
+  - `controllers/SendOrchestrator.ts` — handleSend 162 行四段拆解（prepareSend / acquireRuntime / consumeStream / finalize），跨 Tab 流式缓冲与 generation 冲突保护保留，依赖全回调注入
+  - `controllers/TabController.ts` — handleTabClick / handleNewTab / 草稿管理，含流式期间切 Tab 的 TabStreamingState 恢复
+  - `rendering/MessageActionsHandler.ts` — rewind / fork / copy 事件委托（含 confirm 确认框、maxTabs 拒绝、剪贴板复制）
+  - `ui/ViewActions.ts` — 工具栏动作 + Inline Edit 命令注册（coming-soon 占位，Phase 3 接入真实实现）
+- **统一渲染路径**: 用户消息改走 `MessageRenderer.appendUserMessage()`（header + Markdown + 代码块增强，无操作按钮）；工具调用渲染迁入 `renderToolCallStreaming()` / `appendToolResult()`（共用内部 renderToolCall，新增 `data-tool-id` 定位）；View 中 `appendUserMessage` / `renderToolCall` / `updateToolCallResult` / `appendAssistantMessage` / `scrollToBottom` 全部删除
+- **mojibake 注释恢复**: `KiloCodeView.ts` 全部中文注释人工重写（iconv 自动恢复不可行——注释含 GBK→PUA 私有区字符，字节损坏不可逆，暴力搜索 8 种编码 × 双链均不匹配），已恢复为正确中文并反映新结构
+- **restartRuntime 名实相符（§4.4）**: 从 `resetSession()`（仅清 sessionId，进程仍存活）改为真正 `runtime.stop()` + 清空 inputController；对应 Phase 1 测试断言同步更新（stop 被调用、resetSession 不再调用）
+- **handleTabClick ChatState 同步补全（§4.5）**: 切换标签后 `chatState.setConversationId(tab.state.conversationId)`（空会话也重置为 null）
+
+### Added (Phase 1 测试基线)
+
+- **KiloCodeView 行为契约测试**: 新增 `tests/features/chat/KiloCodeView.test.ts`（21 用例）——onOpen 自动建 Tab、handleSend 空内容/isStreaming 静默返回、全流程发送（懒创建会话→渲染→runtime→保存）、cancel 双控制器、rewind 确认框、fork maxTabs 拒绝、restartRuntime resetSession、copy 剪贴板、Tab 切换 ChatState 同步、coming-soon 方法、InlineEdit 弹窗
+- **SettingsTab 测试**: 新增 `tests/features/settings/SettingsTab.test.ts`（17 用例）——12 个设置项 onChange→saveSettings、Detect 按钮成功/失败/异常三路径；含 2 个 **@phase3 Red 测试**（Language 设置项、Compact Keep Recent 设置项，Phase 3 §5.1/§5.5 实现后转 Green）
+- **SlashCommand 测试**: 新增 `tests/features/commands/SlashCommand.test.ts`（7 用例）——命令注册元数据 3 绿 + **4 个 @phase3 Red 测试**（/compact /clear /model /mode handler 期望行为，Phase 3 §5.2 实现后转 Green）
+- **i18n 接线测试**: 新增 `tests/integration/i18n-wiring.test.ts`（2 个 **@phase3 Red 测试**）——`main.onload` 应调 `initI18n()`；KiloCodeView 发送按钮文本应经 `t()` 渲染（Phase 3 §5.1 实现后转 Green）
+- **InlineEditModal / DiffViewer / MentionService 单测**: 新增 3 个测试文件（17 用例）——指令提交/空输入拒绝/取消/Esc、diff 新增行绿/删除行红/unchanged/Accept-Reject 事件、mention 按类型分组/上限 20 条/大小写不敏感/TFile 读取
+- **测试基建**: 新增 `tests/helpers/obsidianDom.ts`（Obsidian DOM polyfill：createEl/createDiv/createSpan/empty/addClass 等）与 `tests/helpers/factory.ts`（mock app/plugin/runtime 工厂），消除各测试文件重复 mock
+
+### Changed (Documentation)
+
+- **README / README_CN 功能状态对齐（Phase 0）**: 消除「宣传 vs 实现」偏差，为以下功能标注实际状态并附状态图例：
+  - **Planned**: 内联编辑（弹窗可打开，CLI 调用与 diff 预览为 TODO）、斜杠命令（handler 为 TODO，弹 "coming soon"）、@提及（弹 "coming soon"）、MCP 支持（`MCPManager` 模拟连接状态）、国际化（`initI18n()` 从未被调用，UI 文本全英文硬编码）
+  - **Implemented (partial)**: 权限系统（`ApprovalManager`/`ApprovalModal` 已实现，`sendApproval` 端到端未验证）
+  - 修正 Roadmap 清单中 5 项名不副实的 `[x]` 为 `[ ]`（内联编辑 / 斜杠命令 / @提及 / MCP / i18n），并同步 Quick Start 版本约束说明
+- **Quick Start 版本约束说明**: README / README_CN 补充 CLI 版本当前固定为 `PINNED_CLI_VERSION = '7.3.1'`（与 `@kilocode/sdk ^7.3.1` 手动同步），暂不支持自定义 CLI 版本，解除固定已列入 Phase 4
+
+### Added
+
+- **实施方案文档**: 新增 `IMPLEMENTATION_PLAN.md` (770 行)。基于对源码 / 测试 / 构建配置的完整探查，给出 P0~P2 优先级矩阵、5 个 Phase（文档对齐 / 测试基线 / 架构重构 / 功能补齐 / 健壮性 / 加固）的可执行方案。每条改进均带 `file:line` 证据、涉及文件清单、伪代码 / 接口签名、验收标准、风险与回滚、工作量估算。附录含「探查证据索引」便于复现，§十列出 7 个需团队表态的决策点，§十一预留实施记录模板
+
 ### Changed
 
 - **重构通信层**: `KiloCodeChatRuntime` 废弃 `kilo run <message>` 子进程模式，改用 `@kilocode/sdk` 的 `createKiloServer` / `createKiloClient` API，大幅精简代码（885 行 → ~400 行）
