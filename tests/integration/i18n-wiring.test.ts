@@ -154,4 +154,53 @@ describe('i18n 全链路接入（@phase3 §5.1）', () => {
     expect(sendBtn).not.toBeNull();
     expect(sendBtn!.textContent).toBe('SEND_BUTTON_LABEL');
   });
+
+  test('activateView 按 chatViewPlacement=left-sidebar 选择左栏（§5.5）', async () => {
+    const { default: KiloCodePlugin } = await import('../../src/main');
+    const getRightLeaf = jest.fn().mockReturnValue({ setViewState: jest.fn().mockResolvedValue(undefined) });
+    const getLeftLeaf = jest.fn().mockReturnValue({ setViewState: jest.fn().mockResolvedValue(undefined) });
+    const revealLeaf = jest.fn();
+    const app = createMockApp({
+      workspace: {
+        getLeavesOfType: jest.fn().mockReturnValue([]),
+        getRightLeaf,
+        getLeftLeaf,
+        getLeaf: jest.fn(),
+        revealLeaf,
+        getActiveViewOfType: jest.fn().mockReturnValue(null),
+      },
+    });
+    const plugin = new KiloCodePlugin(app, jest.fn()) as any;
+    plugin.settings.chatViewPlacement = 'left-sidebar';
+
+    await plugin.activateView();
+
+    expect(getLeftLeaf).toHaveBeenCalledWith(false);
+    expect(getRightLeaf).not.toHaveBeenCalled();
+    expect(revealLeaf).toHaveBeenCalled();
+  });
+
+  test('activateView 按 chatViewPlacement=main-tab 选择主编辑区（§5.5）', async () => {
+    const { default: KiloCodePlugin } = await import('../../src/main');
+    const getRightLeaf = jest.fn().mockReturnValue({ setViewState: jest.fn().mockResolvedValue(undefined) });
+    const getLeaf = jest.fn().mockReturnValue({ setViewState: jest.fn().mockResolvedValue(undefined) });
+    const revealLeaf = jest.fn();
+    const app = createMockApp({
+      workspace: {
+        getLeavesOfType: jest.fn().mockReturnValue([]),
+        getRightLeaf,
+        getLeftLeaf: jest.fn(),
+        getLeaf,
+        revealLeaf,
+        getActiveViewOfType: jest.fn().mockReturnValue(null),
+      },
+    });
+    const plugin = new KiloCodePlugin(app, jest.fn()) as any;
+    plugin.settings.chatViewPlacement = 'main-tab';
+
+    await plugin.activateView();
+
+    expect(getLeaf).toHaveBeenCalledWith(false);
+    expect(getRightLeaf).not.toHaveBeenCalled();
+  });
 });

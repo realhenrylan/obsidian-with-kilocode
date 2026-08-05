@@ -44,7 +44,7 @@ I already use KiloCode CLI for coding. Now the same tool can help me manage my k
 | Feature | Description |
 |---------|-------------|
 | 🤖 **AI Chat Sidebar** | Chat with KiloCode AI directly in Obsidian's sidebar |
-| 📝 **Inline Edit** *Planned* | Select text + hotkey to edit notes with AI assistance |
+| 📝 **Inline Edit** | Select text + hotkey to edit notes with AI assistance |
 | 🔧 **Slash Commands** | Type `/` for reusable prompt templates |
 | 📎 **@mention** *Planned* | Type `@` to mention vault files, MCP servers, or subagents |
 | 📋 **Plan Mode** | Three modes: code, plan (read-only), ask (Q&A only) |
@@ -52,7 +52,7 @@ I already use KiloCode CLI for coding. Now the same tool can help me manage my k
 | 🔄 **Streaming Responses** | Real-time AI responses with interruption support |
 | 🧵 **Conversation Fork/Rewind** | Fork conversations at any message, rewind to previous states |
 | 📦 **Conversation Compaction** | Compress old messages into summaries to save context |
-| 🔌 **MCP Support** *Planned* | Connect external tools via Model Context Protocol |
+| 🔌 **MCP Support** | Pass-through to the KiloCode CLI — configure servers in `vault/.kilocode/mcp.json` |
 | 🖼️ **Image Attachments** | Paste, drag-drop, or pick images as chat context (5MB limit) |
 | 📄 **Current Note Context** | Toggle active note as AI context input |
 | 🛡️ **Permission System** *Implemented (partial)* | Yolo/Normal/Plan security modes with per-tool approval dialogs |
@@ -257,17 +257,17 @@ Click the KiloCode icon in the ribbon (or `Command Palette → KiloCode: Open ch
 
 ### Inline Edit
 
-> **Status: Planned** — the modal opens today, but the AI call and diff preview are not yet implemented (the callback is a `TODO`).
+> **Status: Implemented** — select text, press `Ctrl/Cmd + Shift + E`, enter an instruction, and the plugin asks the CLI for a suggestion (read-only prompt), shows a diff preview, then writes the change to the note on **Accept**.
 
 1. Select text in a note
 2. Press `Ctrl/Cmd + Shift + E`
 3. Enter your editing instruction in the modal
 4. Review the diff preview (added lines in green, removed in red)
-5. Click **Accept** or **Reject**
+5. Click **Accept** (writes the change to the note) or **Reject**
 
 ### Slash Commands
 
-> **Status: Planned** — the command palette appears, but `/compact /clear /model /mode` handlers are not yet implemented and currently show a "coming soon" notice.
+> **Status: Implemented** — type `/` to open the command palette and run `/compact /clear /model /mode`.
 
 Type `/` in the input to see available commands. A command palette with keyboard navigation (Arrow/Enter/Escape) will appear:
 
@@ -362,16 +362,72 @@ Open Settings → KiloCode:
 
 **MCP servers**: Configure in `vault/.kilocode/mcp.json`:
 
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **CLI Path** | Path to KiloCode CLI (leave empty for auto-detect) | Auto-detect |
+| **Download Mirror URL** | Custom mirror URL for CLI binary download | npm registry |
+| **Auto Start** | Start CLI on vault open | Off |
+
+#### API Configuration
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **API Key** | Your API key (password field) | - |
+| **Base URL** | Custom API base URL | - |
+
+> **Note**: `kilo serve` manages its own credentials independently (via CLI keychain or config files). You only need to fill in API Key / Base URL here to **override** the CLI's defaults. If left empty, the plugin uses the CLI's existing credentials automatically.
+
+#### Chat
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Max Tabs** | Maximum number of chat tabs | 3 |
+| **Auto Save** | Automatically save conversation history | On |
+| **Compact Keep Recent** | Messages to keep during compaction | 5 |
+
+#### Model
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Default Model** | Default AI model | claude-sonnet-4-20250514 |
+| **Temperature** | Model temperature (0-1) | 0.7 |
+
+#### Appearance
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Theme** | Color theme (auto/light/dark) | Auto |
+| **Font Size** | Chat message font size | 14px |
+
+#### Security
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Permission Mode** | Normal / Yolo / Plan | Normal |
+
+### Environment Variables
+
+Configure environment variables in Settings → Environment:
+
+- **Shared** — Applied to all providers
+- **KiloCode** — Applied to KiloCode provider only. Passes `KILO_API_KEY` and `KILO_BASE_URL` from settings to the `kilo serve` process when configured; otherwise the CLI uses its own stored credentials. Working directory is set to vault path.
+
+### MCP Servers
+
+> **Status: Implemented (pass-through)** — MCP servers are configured in `vault/.kilocode/mcp.json` and passed to the `kilo serve` CLI at startup (`KILO_CONFIG_CONTENT`). The CLI owns the connection lifecycle; the plugin queries real status via the SDK (`client.mcp.status()`). Connection state is no longer simulated.
+
+Configure MCP servers in `vault/.kilocode/mcp.json` (SDK `Config.mcp` format):
+
 ```json
 {
-  "servers": {
+  "mcp": {
     "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"]
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"]
     },
     "web-search": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-brave-search"]
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-brave-search"]
     }
   }
 }
@@ -471,11 +527,11 @@ Adding a new language:
 - [x] Streaming responses with interruption
 - [x] Multi-tab support with state persistence
 - [x] Conversation management (CRUD, fork, rewind, compact, resume)
-- [ ] Inline edit with diff preview (modal opens; CLI call + diff preview pending)
+- [x] Inline edit with diff preview (plan-mode CLI call + preview + accept-to-vault)
 - [x] Slash commands with command palette
 - [ ] @mention (files, folders, MCP servers, subagents) (UI pending)
 - [x] Plan mode (code/plan/ask)
-- [ ] MCP server support (config parsed; connection to CLI pending)
+- [x] MCP server support (pass-through to kilo serve, real status query)
 - [x] Permission system (yolo/normal/plan) with approval dialogs (end-to-end approval not yet verified)
 - [x] Image attachments (paste, drag-drop, file picker)
 - [x] Current note context toggle

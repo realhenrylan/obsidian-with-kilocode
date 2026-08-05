@@ -766,6 +766,15 @@ Phase 3 完成后更新 Implemented 列表；Phase 5 完成后补充 `CONTRIBUTI
   - PUA 字符使 Edit 工具无法匹配，采用 Python 字节级替换（ASCII 方法签名锚点）
 - 后续遗留：Phase 3（功能补齐）——8 个 Red 测试已就绪；ViewActions 的 coming-soon 方法为 Phase 3 接入点
 
+### Phase 3（§5.5 剩余设置项）— 完成 2026-08-05
+- 达成：
+  - **temperature 透传**：`buildModelConfig()` 总是携带 `temperature`；**真实 CLI PoC**（本机 kilo serve + SDK client 三种 session.create 组合均成功）确认 CLI 接受该字段
+  - **chatViewPlacement 三路径**：activateView 按设置选 getLeftLeaf / getLeaf(false) / getRightLeaf（默认），替换硬编码
+  - README 双语对齐：Inline Edit / MCP / Slash 段 + Roadmap 勾选 + MCP 配置示例更新为 SDK Config.mcp 格式
+  - 新增 3 用例（temperature 透传、activateView 左栏/主编辑区），全量 341 绿 / typecheck 0 error
+- 偏差：无（§5.5 三设置项中 locale 与 compactKeepRecent 已在前两轮完成，temperature/placement 本轮完成）
+- 后续遗留：**Phase 3 全部完成** → 转入 Phase 4（健壮性：runtime 重连/心跳、ConversationService schema 版本化/原子写、BinaryManager 校验和）
+
 ### Phase 3（§5.4 Inline Edit）— 完成 2026-08-05
 - 达成：
   - `runInlineEdit` 真实实现：plan 模式提示词（只读、不写文件）→ 收集 AI 建议 → `InlineEditModal(showDiff)` + `DiffViewer` 预览 → Accept 写入 vault / Reject 取消

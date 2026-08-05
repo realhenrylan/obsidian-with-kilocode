@@ -414,9 +414,15 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   }
 
   private buildModelConfig(): Record<string, unknown> {
+    // temperature 为独立设置项，总是透传（PoC 已验证 kilo serve session.create 接受）
+    const config: Record<string, unknown> = {
+      temperature: this.getSettings().temperature,
+    };
     const model = this.resolveModel();
-    if (!model) return {};
-    return { modelID: model.modelID, providerID: model.providerID };
+    if (!model) return config;
+    config.modelID = model.modelID;
+    config.providerID = model.providerID;
+    return config;
   }
 
   private resolveModel(): { providerID: string; modelID: string } | null {

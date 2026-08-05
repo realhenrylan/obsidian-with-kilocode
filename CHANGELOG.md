@@ -186,6 +186,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `KiloCodeChatRuntime.ts.ensureServer()`: `createKiloClient` 未传入 `directory` 参数。修复：添加 `directory: vaultPath` 配置项。
   - `KiloCodeChatRuntime.ts.sendMessage()`: 预热场景下客户端在 vault 路径已知前已创建。修复：支持动态更新客户端配置（`applyVaultPathToClient`），通过 `setConfig` 注入 `x-kilo-directory` 请求头。
 
+### Added (Phase 3 功能补齐 — 设置项落实 §5.5 剩余)
+
+- **temperature 透传**: `buildModelConfig()` 总是携带 `temperature: settings.temperature`（含无模型时）。**真实 CLI PoC 验证**：本机 `kilo serve` + SDK `session.create` 三种组合（modelID/providerID / 带 temperature / 仅 temperature）均成功创建会话，确认 CLI 接受该字段
+- **chatViewPlacement 三路径**: `activateView()` 按设置选择 `getLeftLeaf`（left-sidebar）/ `getLeaf(false)`（main-tab）/ `getRightLeaf`（right-sidebar，默认），替换硬编码 `getRightLeaf(false)`
+- README 双语状态更新：Inline Edit / MCP / Slash 段落与 Roadmap 勾选对齐（含 MCP 配置示例更新为 SDK `Config.mcp` 格式）
+- 新增测试 3 用例（runtime temperature 透传 + activateView 左栏/主编辑区），全量 **341 绿** / typecheck 0 error
+
 ### Added (Phase 3 功能补齐 — Inline Edit §5.4)
 
 - **`runInlineEdit` 真实实现**（`src/features/inline-edit/runInlineEdit.ts`）: plan 模式调 CLI（`buildInlineEditPrompt` 只读提示词，要求只返回替换文本、绝不写文件）→ 收集流式文本 → `InlineEditModal(showDiff)` + `DiffViewer` 渲染变更预览 → **Accept 写入当前笔记** / Reject 取消

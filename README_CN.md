@@ -44,7 +44,7 @@
 | 功能 | 说明 |
 |------|------|
 | 🤖 **AI 聊天侧边栏** | 在 Obsidian 侧边栏中直接与 KiloCode AI 对话 |
-| 📝 **内联编辑** *Planned* | 选中文本 + 快捷键，AI 辅助编辑笔记并预览 diff |
+| 📝 **内联编辑** | 选中文本 + 快捷键，AI 辅助编辑笔记并预览 diff |
 | 🔧 **斜杠命令** | 输入 `/` 使用可复用的提示模板（compact/clear/model/mode） |
 | 📎 **@提及** *Planned* | 输入 `@` 提及 Vault 文件、文件夹、MCP 服务器或子代理 |
 | 📋 **计划模式** | 三种模式：code（读写）、plan（只读）、ask（仅问答） |
@@ -52,7 +52,7 @@
 | 🔄 **流式响应** | 实时显示 AI 回复，支持中断取消 |
 | 🧵 **对话分支/回退** | 在任意消息处创建分支（fork），或回退到之前的对话状态 |
 | 📦 **对话压缩** | 将旧消息压缩为摘要，节省上下文窗口 |
-| 🔌 **MCP 支持** *Planned* | 通过 Model Context Protocol 连接外部工具 |
+| 🔌 **MCP 支持** | 透传给 KiloCode CLI — 在 `vault/.kilocode/mcp.json` 中配置服务器 |
 | 🖼️ **图片附件** | 粘贴、拖拽或选择图片作为聊天上下文（单张 5MB 限制） |
 | 📄 **当前笔记上下文** | 一键切换将当前活跃笔记作为 AI 上下文 |
 | 🛡️ **权限系统** *Implemented (partial)* | Yolo/Normal/Plan 三种安全模式，支持逐次审批对话框 |
@@ -254,17 +254,17 @@ npm run build
 
 ### 内联编辑
 
-> **状态：Planned** — 弹窗目前可以打开，但 AI 调用与 diff 预览尚未实现（回调为 `TODO`）。
+> **状态：Implemented** — 选中文本后按 `Ctrl/Cmd + Shift + E`，输入指令，插件以只读提示词请 CLI 给出修改建议，展示 diff 预览，点击**接受**后写入笔记。
 
 1. 在笔记中选中文本
 2. 按 `Ctrl/Cmd + Shift + E`
 3. 在弹窗中输入编辑指令
 4. 查看逐行 diff 预览（新增行绿色、删除行红色）
-5. 点击 **接受** 或 **拒绝**
+5. 点击 **接受**（写入笔记）或 **拒绝**
 
 ### 斜杠命令
 
-> **状态：Planned** — 命令面板可以弹出，但 `/compact /clear /model /mode` 的 handler 尚未实现，目前会弹出 "coming soon" 提示。
+> **状态：Implemented** — 输入 `/` 打开命令面板，执行 `/compact /clear /model /mode`。
 
 在输入框中输入 `/` 查看可用命令。支持键盘导航的命令选择面板（方向键/回车/Esc）：
 
@@ -359,16 +359,63 @@ AI 的工具调用受所选权限模式控制：
 
 **MCP 服务器**：在 `vault/.kilocode/mcp.json` 中配置：
 
+| 设置 | 说明 | 默认值 |
+|------|------|--------|
+| **CLI 路径** | KiloCode CLI 可执行文件路径 | 自动检测 |
+| **自动启动** | 打开 Vault 时自动启动 CLI | 关闭 |
+| **API Key** | 您的 API 密钥 | - |
+
+#### 聊天
+
+| 设置 | 说明 | 默认值 |
+|------|------|--------|
+| **最大标签页数** | 聊天标签页最大数量 | 3 |
+| **自动保存** | 自动保存对话历史 | 开启 |
+| **压缩保留数** | 压缩时保留的最近消息数 | 5 |
+
+#### 模型
+
+| 设置 | 说明 | 默认值 |
+|------|------|--------|
+| **默认模型** | 默认 AI 模型 | claude-sonnet-4-20250514 |
+| **温度** | 模型温度 (0-1) | 0.7 |
+
+#### 外观
+
+| 设置 | 说明 | 默认值 |
+|------|------|--------|
+| **主题** | 颜色主题（自动/亮色/暗色） | 自动 |
+| **字体大小** | 聊天消息字体大小 | 14px |
+
+#### 安全
+
+| 设置 | 说明 | 默认值 |
+|------|------|--------|
+| **权限模式** | Normal / Yolo / Plan | Normal |
+
+### 环境变量
+
+在 设置 → 环境 中配置环境变量：
+
+- **共享** — 应用于所有提供者
+- **KiloCode** — 仅应用于 KiloCode 提供者
+
+### MCP 服务器
+
+> **状态：Implemented（透传）** — 在 `vault/.kilocode/mcp.json` 中配置的 MCP 服务器会在启动时透传给 `kilo serve`（`KILO_CONFIG_CONTENT`）。连接生命周期由 CLI 管理，插件通过 SDK（`client.mcp.status()`）查询真实状态，不再模拟连接。
+
+在 `vault/.kilocode/mcp.json` 中配置 MCP 服务器（SDK `Config.mcp` 格式）：
+
 ```json
 {
-  "servers": {
+  "mcp": {
     "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"]
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"]
     },
     "web-search": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-brave-search"]
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-brave-search"]
     }
   }
 }
@@ -468,11 +515,11 @@ npm run test:coverage
 - [x] 流式响应与中断支持
 - [x] 多标签页支持与状态持久化
 - [x] 会话管理（CRUD、fork、rewind、compact、resume）
-- [ ] 内联编辑与 diff 预览（弹窗可打开；CLI 调用与 diff 预览待实现）
+- [x] 内联编辑与 diff 预览（plan 模式调 CLI + 预览 + 接受写入）
 - [x] 斜杠命令与命令选择面板
 - [ ] @提及（文件、文件夹、MCP 服务器、子代理）（UI 待实现）
 - [x] 计划模式（code/plan/ask）
-- [ ] MCP 服务器支持（配置可解析；连接 CLI 待实现）
+- [x] MCP 服务器支持（透传 kilo serve，真实状态查询）
 - [x] 权限系统（yolo/normal/plan）与审批对话框（端到端审批未验证）
 - [x] 图片附件（粘贴、拖拽、文件选择）
 - [x] 当前笔记上下文开关

@@ -224,9 +224,15 @@ export default class KiloCodePlugin extends Plugin {
     let leaf = workspace.getLeavesOfType(VIEW_TYPE_KILOCODE)[0];
 
     if (!leaf) {
-      const rightLeaf = workspace.getRightLeaf(false);
-      if (rightLeaf) {
-        leaf = rightLeaf;
+      // 按 chatViewPlacement 选择挂载位置：左栏 / 右栏 / 主编辑区
+      const placement = this.settings.chatViewPlacement;
+      const newLeaf = placement === 'left-sidebar'
+        ? workspace.getLeftLeaf(false)
+        : placement === 'main-tab'
+          ? workspace.getLeaf(false)
+          : workspace.getRightLeaf(false);
+      if (newLeaf) {
+        leaf = newLeaf;
         await leaf.setViewState({
           type: VIEW_TYPE_KILOCODE,
           active: true,

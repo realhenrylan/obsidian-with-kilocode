@@ -134,6 +134,18 @@ describe('KiloCodeChatRuntime', () => {
       expect(chunks[chunks.length - 1]).toEqual({ type: 'done' });
     });
 
+    it('passes temperature setting through to session.create (§5.5)', async () => {
+      for await (const _ of runtime.sendMessage('Hello')) {}
+
+      const { createKiloClient } = require('@kilocode/sdk/client');
+      const mockClient = createKiloClient();
+      expect(mockClient.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({ temperature: 0.7 }),
+        })
+      );
+    });
+
     it('handles error from session creation', async () => {
       const { createKiloClient } = require('@kilocode/sdk/client');
       const mockClient = createKiloClient();
