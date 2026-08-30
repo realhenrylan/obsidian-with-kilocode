@@ -23,6 +23,8 @@ jest.mock('obsidian', () => {
     private onChangeCb: ((v: string) => void) | null = null;
     constructor() {
       this.inputEl = document.createElement('input');
+      // Obsidian 1.13 的 DOM 扩展 API（0.9.5 review 修复引入），mock 补齐
+      (this.inputEl as any).setCssStyles = () => {};
     }
     setPlaceholder() { return this; }
     setValue() { return this; }

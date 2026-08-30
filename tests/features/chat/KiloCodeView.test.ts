@@ -61,7 +61,8 @@ jest.mock('obsidian', () => {
     WorkspaceLeaf,
     Modal,
     MarkdownRenderer: {
-      renderMarkdown: jest.fn((content: string, el: HTMLElement) => {
+      // 0.9.6 起统一为 render(app, markdown, el, ...) 新签名
+      render: jest.fn(async (_app: unknown, content: string, el: HTMLElement) => {
         el.createSpan({ text: content });
       }),
     },
@@ -99,6 +100,10 @@ describe('KiloCodeView', () => {
       app: createMockApp(),
       saveSettings: jest.fn(),
       addCommand: jest.fn(),
+      // warmup / getOrCreateRuntime 依赖（与 main.ts 真实成员对齐）
+      binaryManager: { isReady: jest.fn(() => false) },
+      addKilocodeRuntime: jest.fn(),
+      warmupRuntimeRef: null,
     } as any;
 
     // 注册 mock runtime provider（ProviderRegistry 为静态注册）
@@ -379,31 +384,18 @@ describe('KiloCodeView', () => {
   // ─── 其他操作（Phase 3 前的当前行为契约，实现在 ViewActions） ──────────
 
   describe('其他操作', () => {
-    test('未实现按钮弹 coming soon（slash 已实现不再弹）', () => {
-      const actions = (view as any).viewActions;
-      actions.triggerMention();
-      actions.triggerInstructionMode();
-      actions.attachFile();
+    // coming-soon 占位已由 Phase 3 真实实现替换（mention/slash/instruction/attach），原 Red 驱动用例移除
 
-      expect(mockNoticeMessages).toEqual(expect.arrayContaining([
-        'Mention feature coming soon',
-        'Instruction mode coming soon',
-        'File attachment coming soon',
-      ]));
-      // §5.2：triggerSlashCommand 已接入真实 CommandPalette
-      expect(mockNoticeMessages).not.toContain('Slash commands coming soon');
-    });
+    test('triggerSlashCommand 打开命令面板并渲染全部内置命令', async () => {
+      (view as any).triggerSlashCommand();
 
-    test('triggerSlashCommand 打开命令面板并渲染 4 条内置命令', async () => {
-      const actions = (view as any).viewActions;
-      actions.triggerSlashCommand();
+      const paletteEl = (view as any).commandPaletteEl;
+      expect(paletteEl).not.toBeNull();
+      const items = paletteEl.querySelectorAll('.kilo-command-item');
+      expect(items.length).toBe(6);
 
-      const wrap = (view as any).inputContainerEl.querySelector('.kilo-command-palette-wrap');
-      expect(wrap).not.toBeNull();
-      const items = wrap.querySelectorAll('.kilo-command-item');
-      expect(items.length).toBe(4);
       // 点击 /compact 应执行 handler（当前会话存在时压缩）
-      const compactItem = wrap.querySelectorAll('.kilo-command-item')[0];
+      const compactItem = items[0];
       const convId = await (view as any).conversationController.ensureConversation();
       await (view as any).conversationController.addMessage({
         id: 'msg-1', role: 'user', content: 'hello', timestamp: Date.now(),

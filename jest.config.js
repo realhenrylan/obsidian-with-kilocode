@@ -15,4 +15,6 @@ module.exports = {
   },
   transformIgnorePatterns: [],
   setupFiles: ['<rootDir>/tests/setup.ts'],
+  // onload 测试会创建真实 BinaryManager（preload 含后台定时器），进程不自动退出
+  forceExit: true,
 };

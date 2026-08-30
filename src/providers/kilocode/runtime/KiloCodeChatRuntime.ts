@@ -2,24 +2,17 @@ import type { ChatRuntime, MessageContext, StreamChunk, StreamChunkType } from '
 import type { BinaryManager } from '../../../core/binary/BinaryManager';
 import type { KiloCodeSettings } from '../../../core/types';
 
-<<<<<<< HEAD
 import { createKiloServer } from '@kilocode/sdk/server';
-import { createKiloClient } from '@kilocode/sdk/client';
-import type { KiloClient } from '@kilocode/sdk/client';
+import { createKiloClient, type KiloClient, type Config } from '@kilocode/sdk/client';
 import * as http from 'http';
 import * as pathModule from 'path';
 import { EventBuffer } from './EventBuffer';
 import { loadSkills } from './SkillLoader';
 import { QUESTION_PROTOCOL } from './prompts';
-=======
-import { createKiloServer, type ServerOptions } from '@kilocode/sdk/server';
-import { createKiloClient, type KiloClient, type Config } from '@kilocode/sdk/client';
->>>>>>> 867107b (feat: Phase 3 §5.3 — MCP path A passthrough to kilo serve with real status query)
 
 const DEFAULT_AGENT = 'code';
 const SERVE_TIMEOUT = 15000;
 
-<<<<<<< HEAD
 interface KiloSession {
   create(params: { body: Record<string, unknown>; signal?: AbortSignal }): Promise<{ error?: unknown; data?: { id: string } }>;
   abort(params: { path: { id: string } }): Promise<void>;
@@ -87,7 +80,7 @@ function nodeFetch(input: RequestInfo | URL, init?: RequestInit, agent?: http.Ag
         const isSSE = ct.includes('text/event-stream');
 
         if (isSSE) {
-          // SSE: bridge Node.js Readable �� Web ReadableStream
+          // SSE: bridge Node.js Readable → Web ReadableStream
           const stream = new ReadableStream({
             start(controller) {
               res.on('data', (chunk: Buffer) => controller.enqueue(chunk));
@@ -129,13 +122,12 @@ function nodeFetch(input: RequestInfo | URL, init?: RequestInit, agent?: http.Ag
     }
   });
 }
-=======
+
 /**
  * MCP 配置提供者：返回 vault/.kilocode/mcp.json 的 mcp 字段内容（SDK Config.mcp 格式）。
  * 读取失败时应 resolve null（不影响 serve 启动）。
  */
 export type McpConfigProvider = () => Promise<Record<string, unknown> | null>;
->>>>>>> 867107b (feat: Phase 3 §5.3 — MCP path A passthrough to kilo serve with real status query)
 
 export class KiloCodeChatRuntime implements ChatRuntime {
   private binaryManager: BinaryManager;
@@ -158,16 +150,13 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   constructor(binaryManager: BinaryManager, getSettings: () => KiloCodeSettings, mcpConfigProvider?: McpConfigProvider | null) {
     this.binaryManager = binaryManager;
     this.getSettings = getSettings;
-<<<<<<< HEAD
     this.httpAgent = new http.Agent({
       keepAlive: true,
       keepAliveMsecs: 30000,
       maxSockets: 1,
     });
     this.boundFetch = (input, init) => nodeFetch(input, init, this.httpAgent);
-=======
     this.mcpConfigProvider = mcpConfigProvider ?? null;
->>>>>>> 867107b (feat: Phase 3 §5.3 — MCP path A passthrough to kilo serve with real status query)
   }
 
   async start(vaultPath?: string): Promise<void> {
@@ -208,7 +197,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.httpAgent.destroy();
   }
 
-  /** ͬ��ǿ����ֹ CLI ���̣����� process.on('exit') ���������� */
+/** 同步强制终止 CLI 进程（用于 process.on('exit') 兜底清理） */
   killSync(): void {
     this.clearIdleTimer();
     this.abortController?.abort();
@@ -386,12 +375,9 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       hostname: '127.0.0.1',
       port: 0,
       timeout: SERVE_TIMEOUT,
-<<<<<<< HEAD
-=======
       cors: ['app://obsidian.md'],
       // mcp.json 是 JSON 文件内容（unknown），此处安全转换为 SDK Config 结构
       ...(mcpConfig ? { config: { mcp: mcpConfig } as Config } : {}),
->>>>>>> 867107b (feat: Phase 3 §5.3 — MCP path A passthrough to kilo serve with real status query)
     });
     this.client = createKiloClient({
       baseUrl: this.serverHandle.url,
@@ -465,7 +451,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     const specialistSkills = skills.filter(s => s.name !== 'kilocode-core');
 
     if (coreSkills.length > 0) {
-      parts.push('[SYSTEM CONTEXT �� Obsidian KiloCode Core]');
+      parts.push('[SYSTEM CONTEXT — Obsidian KiloCode Core]');
       for (const core of coreSkills) {
         parts.push(core.content);
       }
@@ -556,14 +542,14 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         }
         return null;
 
-      // Full message updated �� signal done
+      // Full message updated — signal done
       case 'message.updated':
         if (props.error) {
           return { type: 'error' as StreamChunkType, error: typeof props.error === 'string' ? props.error : JSON.stringify(props.error) };
         }
         return { type: 'done' as StreamChunkType };
 
-      // Session status �� used to detect completion
+      // Session status — used to detect completion
       case 'session.status':
         if (props.status === 'error' || props.state === 'error') {
           return { type: 'error' as StreamChunkType, error: typeof props.error === 'string' ? props.error : props.message || 'Session error' };

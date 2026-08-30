@@ -15,8 +15,17 @@ import type { MentionItem } from '../../../src/features/mention/MentionService';
 
 jest.mock('obsidian', () => ({
   App: class {},
-  TFile: class TFile {},
-  TFolder: class TFolder {},
+  TFile: class TFile {
+    basename: string;
+    constructor(public name: string = '', public path: string = '') {
+      // Obsidian TFile.basename 为去扩展名的文件名
+      this.basename = name.replace(/\.[^.]+$/, '');
+    }
+  },
+  TFolder: class TFolder {
+    children: Array<unknown> = [];
+    constructor(public name: string = '', public path: string = '') {}
+  },
 }));
 
 import { TFile, TFolder } from 'obsidian';
@@ -202,8 +211,9 @@ describe('MentionService', () => {
     );
     const service = new MentionService(mockApp as any);
 
+    // connected: true 模拟 §5.3 后从 CLI 状态查询到的真实连接
     const mcpServers = [
-      { id: 'server-1', name: 'Database Server', description: 'PostgreSQL queries' },
+      { id: 'server-1', name: 'Database Server', description: 'PostgreSQL queries', connected: true },
       { id: 'server-2', name: 'Web Search', description: 'Search the web' },
     ];
 

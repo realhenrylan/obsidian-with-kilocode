@@ -69,45 +69,7 @@ export class ViewActions {
     this.deps.currentNoteContext.toggle();
   }
 
-  /** 触发 mention（Phase 3 实现） */
-  triggerMention(): void {
-    this.deps.notice('Mention feature coming soon');
-  }
-
   /**
    * 触发斜杠命令：打开 CommandPalette 展示所有命令，
    * 选中后执行 handler（/compact /clear /model /mode）
-   */
-  triggerSlashCommand(): void {
-    if (!this.deps.commandRegistry) {
-      this.deps.notice('Slash commands coming soon');
-      return;
-    }
-    const container = this.deps.getInputContainerEl();
-    if (!container) return;
-
-    // 复用已存在的 palette 容器（输入区顶部）
-    let wrapEl = container.querySelector('.kilo-command-palette-wrap') as HTMLElement | null;
-    if (!wrapEl) {
-      wrapEl = document.createElement('div');
-      wrapEl.className = 'kilo-command-palette-wrap';
-      container.insertBefore(wrapEl, container.firstChild);
-    }
-
-    const palette = new CommandPalette(wrapEl, this.deps.commandRegistry.getAll(), async (cmd) => {
-      await cmd.handler('');
-      this.deps.notice(`Executed ${cmd.name}`);
-    });
-    palette.show();
-  }
-
-  /** 触发指令模式（Phase 3 实现） */
-  triggerInstructionMode(): void {
-    this.deps.notice('Instruction mode coming soon');
-  }
-
-  /** 附加文件（Phase 3 实现） */
-  attachFile(): void {
-    this.deps.notice('File attachment coming soon');
-  }
-}
+   */}

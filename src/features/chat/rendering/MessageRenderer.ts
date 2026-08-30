@@ -387,7 +387,7 @@ export class MessageRenderer {
     const contentEl = messageEl.createDiv({ cls: 'kilo-message-content' });
     if (content) {
       const textEl = contentEl.createDiv({ cls: 'kilo-message-text' });
-      void MarkdownRenderer.renderMarkdown(content, textEl, '', this.component);
+      void MarkdownRenderer.render(this.app, content, textEl, '', this.component);
       this.enhanceCodeBlocks(textEl);
     }
     this.scrollToBottom();

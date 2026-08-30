@@ -36,6 +36,10 @@ export function createMockPlugin(settingsOverrides: Partial<KiloCodeSettings> = 
     app: createMockApp(),
     saveSettings: jest.fn(),
     addCommand: jest.fn(),
+    // runtime 生命周期相关（KiloCodeView warmup / getOrCreateRuntime 依赖）
+    binaryManager: { isReady: jest.fn(() => false), preload: jest.fn() },
+    addKilocodeRuntime: jest.fn(),
+    warmupRuntimeRef: null,
   } as any;
 }
 

@@ -36,7 +36,7 @@
     "eslint": "^8.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^30.4.1",
-    "obsidian": "latest",
+    "obsidian": "1.13.1",
     "playwright-core": "^1.60.0",
     "ts-jest": "^29.1.0",
     "typescript": "^5.3.0"

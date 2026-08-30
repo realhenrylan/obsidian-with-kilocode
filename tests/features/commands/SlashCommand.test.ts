@@ -13,10 +13,10 @@ describe('createDefaultCommandRegistry 元数据', () => {
     registry = createDefaultCommandRegistry();
   });
 
-  test('注册 4 个内置命令', () => {
+  test('注册 6 个内置命令（compact/clear/model/mode/skills/skill）', () => {
     const ids = registry.getAll().map(c => c.id);
-    expect(ids).toEqual(expect.arrayContaining(['compact', 'clear', 'model', 'mode']));
-    expect(registry.getAll()).toHaveLength(4);
+    expect(ids).toEqual(expect.arrayContaining(['compact', 'clear', 'model', 'mode', 'skills', 'skill']));
+    expect(registry.getAll()).toHaveLength(6);
   });
 
   test('命令元数据完整（名称/描述/图标）', () => {

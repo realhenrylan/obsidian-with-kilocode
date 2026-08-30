@@ -43,18 +43,26 @@ export class MentionService {
     mcpServers?: Array<{ id: string; name: string; description?: string; connected?: boolean }>;
     subagents?: Array<{ id: string; name: string; description?: string }>;
   }): Promise<MentionItem[]> {
+    // 前缀匹配与子串匹配合并（prefix 优先），避免某一类型的前缀命中
+    // 阻止其他类型的子串回退（如输入 note 时文件夹 Notes 前缀命中、
+    // 文件 Meeting Notes 仅子串命中，两者都应出现）
+    const seen = new Set<string>();
     const results: MentionItem[] = [];
-
-    // 先尝试前缀匹配
-    const prefixResults = this.searchAll(query, context, true);
-    if (prefixResults.length > 0) {
-      results.push(...prefixResults);
-    } else if (query.length > 0) {
-      // 前缀无结果，回退到子串匹配
-      results.push(...this.searchAll(query, context, false));
+    const passes = query.length > 0
+      ? [this.searchAll(query, context, true), this.searchAll(query, context, false)]
+      : [this.searchAll(query, context, true)];
+    for (const pass of passes) {
+      for (const item of pass) {
+        const key = `${item.type}:${item.path}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        results.push(item);
+        if (results.length >= MAX_TOTAL) break;
+      }
+      if (results.length >= MAX_TOTAL) break;
     }
 
-    return results.slice(0, MAX_TOTAL);
+    return results;
   }
 
   /** 根据匹配模式搜索所有类型 */

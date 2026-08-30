@@ -92,7 +92,7 @@ export function createDefaultCommandRegistry(deps?: Partial<SlashCommandDeps>): 
 
   registry.register({
     id: 'model',
-    name: '/model',
+    name: '/model <name>',
     description: 'Switch AI model',
     icon: '🤖',
     handler: deps?.modelSwitcher

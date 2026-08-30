@@ -132,6 +132,7 @@ describe('i18n 全链路接入（@phase3 §5.1）', () => {
     // 当前 main.ts 未调用 → Red；Phase 3 §5.1 接入后 Green
     const { default: KiloCodePlugin } = await import('../../src/main');
     const plugin = new KiloCodePlugin(createMockApp(), jest.fn()) as any;
+    plugin.binaryManager = { isReady: () => false };
 
     await plugin.onload();
 
@@ -146,6 +147,10 @@ describe('i18n 全链路接入（@phase3 §5.1）', () => {
       app: createMockApp(),
       addCommand: jest.fn(),
       saveSettings: jest.fn(),
+      // warmup / getOrCreateRuntime 依赖（与 main.ts 真实成员对齐）
+      binaryManager: { isReady: () => false },
+      addKilocodeRuntime: jest.fn(),
+      warmupRuntimeRef: null,
     } as any;
     const view = new KiloCodeView({ app: plugin.app } as any, plugin) as any;
     await view.onOpen();
@@ -171,6 +176,7 @@ describe('i18n 全链路接入（@phase3 §5.1）', () => {
       },
     });
     const plugin = new KiloCodePlugin(app, jest.fn()) as any;
+    plugin.binaryManager = { isReady: () => false };
     plugin.settings.chatViewPlacement = 'left-sidebar';
 
     await plugin.activateView();
@@ -196,6 +202,7 @@ describe('i18n 全链路接入（@phase3 §5.1）', () => {
       },
     });
     const plugin = new KiloCodePlugin(app, jest.fn()) as any;
+    plugin.binaryManager = { isReady: () => false };
     plugin.settings.chatViewPlacement = 'main-tab';
 
     await plugin.activateView();
