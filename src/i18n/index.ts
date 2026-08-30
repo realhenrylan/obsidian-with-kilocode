@@ -9,7 +9,7 @@ import ko from './locales/ko.json';
 
 export type Locale = 'en' | 'zh' | 'ja' | 'ko';
 
-const resources: Record<Locale, any> = {
+const resources: Record<Locale, Record<string, unknown>> = {
   en,
   zh,
   ja,
