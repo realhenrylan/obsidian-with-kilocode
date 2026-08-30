@@ -22,7 +22,6 @@ export interface DetectionResult {
 }
 
 export class BinaryManager {
-  private pluginDir: string;
   private binDir: string;
   private cachedPath: string | null = null;
   private cachedMethod: string = '';
@@ -30,7 +29,6 @@ export class BinaryManager {
   private loadingPromise: Promise<string> | null = null;
 
   constructor(pluginDir: string) {
-    this.pluginDir = pluginDir;
     this.binDir = path.join(pluginDir, 'bin');
   }
 

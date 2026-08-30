@@ -3,7 +3,6 @@
 // 从 KiloCodeView 提取的薄动作层
 
 import { InlineEditModal } from '../../inline-edit/InlineEditModal';
-import { CommandPalette } from '../../commands/CommandPalette';
 import type { CommandRegistry } from '../../commands/SlashCommand';
 import type { App } from 'obsidian';
 

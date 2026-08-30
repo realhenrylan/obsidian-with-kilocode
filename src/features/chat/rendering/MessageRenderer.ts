@@ -13,7 +13,6 @@ export class MessageRenderer {
   private container: HTMLElement;
   private app: App;
   private component: Component;
-  private virtualScroller: VirtualScroller | null = null;
   // 流式渲染追踪
   private currentAssistantEl: HTMLElement | null = null;
   private currentTextEl: HTMLElement | null = null;
@@ -137,12 +136,12 @@ export class MessageRenderer {
     this.container.empty();
 
     if (messages.length > 50) {
-      this.virtualScroller = new VirtualScroller(
+      const scroller = new VirtualScroller<Message>(
         this.container,
         { itemHeight: 100, overscan: 5 },
-        (message: Message, index) => this.renderMessage(message)
+        (message: Message) => this.renderMessage(message)
       );
-      this.virtualScroller.setItems(messages);
+      scroller.setItems(messages);
     } else {
       for (const message of messages) {
         this.renderMessage(message);

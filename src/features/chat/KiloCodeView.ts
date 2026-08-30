@@ -5,9 +5,8 @@
 // 重构：借鉴 claudian 架构，DOM 骨架只创建一次，通过 updateUI() 更新内容
 // 解决：1) 无法发送第二条消息 (2) 切换会话消息消失 (3) 重启后无法发送
 
-import { FileSystemAdapter, ItemView, MarkdownView, Notice, WorkspaceLeaf } from 'obsidian';
+import { ItemView, MarkdownView, Notice, WorkspaceLeaf } from 'obsidian';
 import { VIEW_TYPE_KILOCODE } from '../../core/types';
-import type { Message } from '../../core/types';
 import type KiloCodePlugin from '../../main';
 import { TabManager } from './tabs/TabManager';
 import { StreamController } from './controllers/StreamController';
@@ -17,7 +16,6 @@ import { ChatState } from './state/ChatState';
 import { MessageRenderer } from './rendering/MessageRenderer';
 import { InputController } from './controllers/InputController';
 import { ImageContext } from './ui/ImageContext';
-import { CLIErrorHandler } from '../../shared/ErrorNotice';
 import { PlanModeController } from './PlanModeController';
 import { ProviderRegistry } from '../../core/providers/ProviderRegistry';
 import type { ChatRuntime } from '../../core/providers/types';
@@ -31,9 +29,6 @@ import { showApprovalModal } from '../../core/security/ApprovalModal';
 import { CurrentNoteContext } from './ui/CurrentNoteContext';
 import { FileAttachmentContext } from './ui/FileAttachmentContext';
 import { InputToolbar } from './ui/InputToolbar';
-import { MentionService } from '../mention/MentionService';
-import type { MentionContext, MentionItem } from '../mention/MentionService';
-import { MentionDropdown } from '../mention/MentionDropdown';
 import { MentionCategoryMenu } from '../mention/MentionCategoryMenu';
 import type { MentionCategory } from '../mention/MentionCategoryMenu';
 import { VaultFileBrowserModal } from '../mention/VaultFileBrowserModal';
@@ -69,26 +64,20 @@ export class KiloCodeView extends ItemView {
   private appliedCustomInstructions: string | null = null;
   private commandRegistry = createDefaultCommandRegistry();
   private commandPaletteEl: HTMLElement | null = null;
-  private slashActive = false;
   private activePalette: CommandPalette | null = null;
 
   // 挝久�?DOM 引用（骨架坪创建一次）
   // 持久化 DOM 引用（框架只创建一次）
-  private viewContainerEl: HTMLElement | null = null;
   private tabBarEl: HTMLElement | null = null;
   private messagesEl: HTMLElement | null = null;
   private textareaEl: HTMLTextAreaElement | null = null;
   private inputContainerEl: HTMLElement | null = null;
   private modeToggleEl: HTMLElement | null = null;
-  private modelBtnEl: HTMLElement | null = null;
-  private actionBarEl: HTMLElement | null = null;
   private cancelBtnEl: HTMLButtonElement | null = null;
   private sendBtnEl: HTMLButtonElement | null = null;
   private tabBarView: TabBarView | null = null;
 
   // @mention
-  private mentionService: MentionService | null = null;
-  private mentionDropdown: MentionDropdown | null = null;
   private mentionCategoryMenu: MentionCategoryMenu | null = null;
   private mentionContainerEl: HTMLElement | null = null;
 
@@ -181,6 +170,7 @@ export class KiloCodeView extends ItemView {
       isNoteIncluded: () => this.currentNoteContext.isIncluded(),
       getNoteContent: async () => (await this.currentNoteContext.getNoteContent()) ?? undefined,
       getCurrentNotePath: () => this.getCurrentNotePath(),
+      getAppliedCustomInstructions: () => this.appliedCustomInstructions,
       clearImages: () => this.imageContext.clearImages(),
       getStreamingState: (tabId) => this.streamingStates.get(tabId),
       setStreamingState: (tabId, state) => { this.streamingStates.set(tabId, state); },
@@ -338,13 +328,11 @@ export class KiloCodeView extends ItemView {
 
     const container = this.containerEl.children[1] as HTMLElement;
     const refs = ChatLayoutBuilder.build(container);
-    this.viewContainerEl = refs.viewContainerEl;
     this.modeToggleEl = refs.modeToggleEl;
     this.tabBarEl = refs.tabBarEl;
     this.messagesEl = refs.messagesEl;
     this.inputContainerEl = refs.inputContainerEl;
     this.textareaEl = refs.textareaEl;
-    this.actionBarEl = refs.actionBarEl;
     this.sendBtnEl = refs.sendBtnEl;
     this.cancelBtnEl = refs.cancelBtnEl;
 
@@ -486,12 +474,6 @@ export class KiloCodeView extends ItemView {
         if (consumed) return;
       }
 
-      // then mention dropdown
-      if (this.mentionDropdown) {
-        const consumed = this.mentionDropdown.handleKeyDown(e);
-        if (consumed) return;
-      }
-
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         const content = this.textareaEl!.value;
@@ -565,10 +547,6 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** 截断 ID 用于标签显示 */
-  private truncateId(id: string): string {
-    return id.length > 12 ? id.slice(0, 12) + '...' : id;
-  }
 
   /** 隝机坠佝符杝示语 */
 
@@ -681,10 +659,6 @@ export class KiloCodeView extends ItemView {
     this.streamController.cancel();
   }
 
-  /** 处理当前笔记切换 */
-  private handleToggleCurrentNote(): void {
-    this.currentNoteContext.toggle();
-  }
 
   /** trigger mention ?show category menu */
   private triggerMention(): void {
@@ -693,49 +667,12 @@ export class KiloCodeView extends ItemView {
     this.showMentionCategoryMenu();
   }
 
-  /** Create MentionService on first use */
-  private initMentionService(): void {
-    if (!this.mentionService) {
-      this.mentionService = new MentionService(this.app);
-    }
-  }
 
-  /** Show mention dropdown with search results */
-  private async showMentionDropdown(query: string, textarea: HTMLTextAreaElement, startPos?: number): Promise<void> {
-    if (!this.mentionService || !this.mentionContainerEl) return;
 
-    const context: MentionContext = {
-      mcpServers: readCliMcpServers(),
-      subagents: readCliSubagents(),
-    };
-
-    const items = await this.mentionService.search(query, context);
-
-    this.closeMentionDropdown();
-    this.closeMentionCategoryMenu();
-
-    if (items.length === 0) return;
-
-    this.mentionDropdown = new MentionDropdown(
-      this.mentionContainerEl,
-      items,
-      (selected: MentionItem) => this.onMentionSelected(selected, startPos)
-    );
-    this.mentionDropdown.show();
-  }
-
-  /** Close mention dropdown */
-  private closeMentionDropdown(): void {
-    if (this.mentionDropdown) {
-      this.mentionDropdown.hide();
-      this.mentionDropdown = null;
-    }
-  }
 
   /** Show category menu (first-level) */
   private showMentionCategoryMenu(): void {
     if (!this.mentionContainerEl) return;
-    this.closeMentionDropdown();
     this.closeMentionCategoryMenu();
 
     const categories: MentionCategory[] = [
@@ -767,7 +704,6 @@ export class KiloCodeView extends ItemView {
       this.activePalette.hide();
       this.activePalette = null;
     }
-    this.slashActive = false;
   }
 
   /** Insert item name into textarea at cursor */
@@ -824,33 +760,6 @@ export class KiloCodeView extends ItemView {
     }
   }
 
-  /** Insert selected mention into textarea */
-  private onMentionSelected(item: MentionItem, mentionStartPos?: number): void {
-    if (!this.textareaEl) return;
-
-    const textarea = this.textareaEl;
-    const cursorPos = textarea.selectionStart;
-
-    if (mentionStartPos !== undefined) {
-      // Input @ triggered: replace from @ to cursor with selected name
-      const before = textarea.value.slice(0, mentionStartPos);
-      const after = textarea.value.slice(cursorPos);
-      textarea.value = before + item.name + ' ' + after;
-
-      const newCursor = mentionStartPos + item.name.length + 1;
-      textarea.setSelectionRange(newCursor, newCursor);
-    } else {
-      // Toolbar button triggered: insert name at cursor
-      const before = textarea.value.slice(0, cursorPos);
-      const after = textarea.value.slice(cursorPos);
-      textarea.value = before + item.name + ' ' + after;
-
-      const newCursor = cursorPos + item.name.length + 1;
-      textarea.setSelectionRange(newCursor, newCursor);
-    }
-
-    textarea.focus();
-  }
 
   /** 处理斜杠命令输入 */
   private async handleSlashInput(input: string): Promise<void> {
@@ -879,19 +788,15 @@ export class KiloCodeView extends ItemView {
   /** 触发斜杠命令面板 */
   private triggerSlashCommand(): void {
     if (!this.commandPaletteEl) return;
-    this.closeMentionDropdown();
     this.closeMentionCategoryMenu();
-    this.slashActive = true;
     this.activePalette = new CommandPalette({
       container: this.commandPaletteEl,
       commands: this.commandRegistry.getAll(),
       onSelect: (cmd) => {
-        this.slashActive = false;
-        void this.handleSlashCommand(cmd);
+          void this.handleSlashCommand(cmd);
       },
       onClose: () => {
-        this.slashActive = false;
-      },
+        },
     });
     this.activePalette.show();
   }
@@ -1063,18 +968,18 @@ export class KiloCodeView extends ItemView {
   }
 
   /** 回退到指定消息（委托 MessageActionsHandler） */
-  private async handleRewind(messageId: string): Promise<void> {
+  async handleRewind(messageId: string): Promise<void> {
     await this.messageActionsHandler.rewind(messageId);
   }
 
 
   /** 从指定消息处 fork 新会话（委托 MessageActionsHandler） */
-  private async handleFork(messageId: string): Promise<void> {
+  async handleFork(messageId: string): Promise<void> {
     await this.messageActionsHandler.fork(messageId);
   }
 
   /** 复制消息内容到剪贴板（委托 MessageActionsHandler） */
-  private async handleCopy(messageId: string): Promise<void> {
+  async handleCopy(messageId: string): Promise<void> {
     await this.messageActionsHandler.copy(messageId);
   }
 }

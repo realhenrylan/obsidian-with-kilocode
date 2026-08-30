@@ -38,7 +38,7 @@ export class ErrorNotice {
   }
 
   /** 创建重试通知 */
-  static withRetry(message: string, onRetry: () => void): ErrorNotice {
+  static withRetry(message: string, _onRetry: () => void): ErrorNotice {
     const notice = new ErrorNotice(`${message}\n\nClick to retry`, 'error', 10000);
     notice.show();
     return notice;

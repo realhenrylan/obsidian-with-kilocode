@@ -25,7 +25,7 @@ export function createSkillWatcher(vaultPath: string): SkillWatcher {
       fs.mkdirSync(skillsDir, { recursive: true });
     }
 
-    watcher = fs.watch(skillsDir, { recursive: true }, (eventType, filename) => {
+    watcher = fs.watch(skillsDir, { recursive: true }, (_eventType, filename) => {
       if (!filename) {
         invalidateAfterDebounce();
         return;

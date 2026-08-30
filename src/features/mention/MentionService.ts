@@ -144,7 +144,6 @@ export class MentionService {
     prefixOnly: boolean
   ): MentionItem[] {
     const results: MentionItem[] = [];
-    const lowerQuery = query.toLowerCase();
 
     for (const server of servers) {
       // 只列真实已连接的；connected 由注入方从 CLI 状态查询

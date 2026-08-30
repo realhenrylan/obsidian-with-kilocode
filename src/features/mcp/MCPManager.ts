@@ -124,7 +124,7 @@ export class MCPManager {
   }
 
   /** 预留：工具调用现在由 CLI 内部完成，本方法保留接口以便未来扩展 */
-  async callTool(serverId: string, toolName: string, args: Record<string, unknown>): Promise<unknown> {
+  async callTool(_serverId: string, toolName: string, _args: Record<string, unknown>): Promise<unknown> {
     throw new Error(`Tool ${toolName} not found`);
   }
 

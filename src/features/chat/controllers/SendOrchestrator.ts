@@ -59,6 +59,8 @@ export interface SendOrchestratorDeps {
   isNoteIncluded: () => boolean;
   getNoteContent: () => Promise<string | undefined>;
   getCurrentNotePath: () => string | undefined;
+  /** 会话级自定义指令（CustomInstructionModal Apply 注入） */
+  getAppliedCustomInstructions?: () => string | null;
   clearImages: () => void;
 
   // 跨 Tab 流式缓冲
@@ -182,6 +184,7 @@ export class SendOrchestrator {
     const generator = runtime.sendMessage(prep.content, {
       vaultPath: this.deps.getVaultPath(),
       currentNote: prep.currentNote || this.deps.getCurrentNotePath(),
+      customInstructions: this.deps.getAppliedCustomInstructions?.() ?? undefined,
     });
 
     // 进入流式状态

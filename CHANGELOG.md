@@ -34,6 +34,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **xattr 参数化（§7.5.1 顺手收口）**: `execSync` 字符串拼接改为 `spawnSync` 参数数组，消除路径含引号的命令注入
 - 新增 `tests/core/binary/binary-integrity.test.ts`（6 用例：原子写失败不半成品/sha512+sha1 校验/无校验信息跳过/版本单一来源）
 
+### Changed (Phase 5 §7.1/§7.4 — tsconfig 严格化 + 死代码清理)
+
+- **tsconfig 严格化（§7.1）**: 分四组渐进开启并全量修复——`strictBindCallApply`/`strictFunctionTypes`（VirtualScroller 泛型显式化）→ `useUnknownInCatchVariables`（0 处需改）→ `noUnusedLocals`/`noUnusedParameters`（清理 27 处）→ `noImplicitReturns`/`noFallthroughCasesInSwitch`
+- **死代码删除（§7.4）**: `KiloCodeChatRuntime.parseSSEBlock`/`parseEvent`（旧子进程 SSE 模式遗留）；KiloCodeView 的 `initMentionService`/`showMentionDropdown`/`onMentionSelected`/`closeMentionDropdown`（早期 @ 下拉方案，活链路为 category menu → vault browser/modal）、`slashActive`/`viewContainerEl`/`modelBtnEl`/`actionBarEl`/`truncateId`/`handleToggleCurrentNote`；MessageRenderer 未读 `virtualScroller` 字段
+- **功能修复**：`CustomInstructionModal` 的 Apply 会话级指令此前未进入发送链路（仅弹提示）；现通过 `SendOrchestratorDeps.getAppliedCustomInstructions` 注入 `MessageContext.customInstructions`，Apply 真正生效
+- 测试 371 全绿、typecheck 0 error、build 0 error
+
 ## [0.10.0] - 2026-06-12
 
 ### Fixed

@@ -59,7 +59,6 @@ export class KiloCodeSettingTab extends PluginSettingTab {
     }
 
     // API Configuration 区域下方的安全提示
-    const vaultConfigDir = this.app.vault.configDir;
     containerEl.createDiv({
       cls: 'kilo-setting-warning',
       text: t('settings.apiKeyWarning'),
