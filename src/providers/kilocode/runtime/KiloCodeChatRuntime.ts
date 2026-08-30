@@ -37,9 +37,15 @@ interface KiloSession {
   prompt(params: { path: { id: string }; body: Record<string, unknown>; signal?: AbortSignal }): Promise<{ error?: unknown; data?: { parts?: Array<Record<string, unknown>> } }>;
 }
 
+interface KiloMcpStatusResult {
+  error?: unknown;
+  data?: Record<string, { status: string; error?: string }>;
+}
+
 interface KiloClientInternals {
   _client?: { setConfig(config: { headers: Record<string, string> }): void };
   postSessionIdPermissionsPermissionId(params: { path: { id: string; permissionID: string }; body: { decision: string } }): Promise<void>;
+  mcp?: { status(params: Record<string, unknown>): Promise<KiloMcpStatusResult> };
 }
 
 interface StreamEventPart {
@@ -499,7 +505,7 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     await this.start();
     if (!this.client) return {};
     try {
-      const result = await (this.client.mcp as any).status({});
+      const result = await (this.client as unknown as KiloClientInternals).mcp?.status({});
       return (result?.data ?? {}) as Record<string, { status: string; error?: string }>;
     } catch (err) {
       console.error('[KiloCode] getMcpStatus error:', err);

@@ -28,11 +28,11 @@ export function getLocale(): Locale {
 
 export function t(key: string, params?: Record<string, string>): string {
   const keys = key.split('.');
-  let value: any = resources[currentLocale];
+  let value: unknown = resources[currentLocale];
 
   for (const k of keys) {
     if (value && typeof value === 'object') {
-      value = value[k];
+      value = (value as Record<string, unknown>)[k];
     } else {
       return key;
     }

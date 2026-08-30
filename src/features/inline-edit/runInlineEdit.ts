@@ -61,8 +61,8 @@ export async function runInlineEdit(deps: InlineEditDeps, selectedText: string, 
         break;
       }
     }
-  } catch (err: any) {
-    failed = err?.message || String(err);
+  } catch (err: unknown) {
+    failed = err instanceof Error ? err.message : String(err);
   }
 
   if (failed) {

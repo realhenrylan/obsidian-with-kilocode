@@ -51,6 +51,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **CI 加固（§7.7）**: 拆分 5 个并行 job（typecheck/lint/audit/build+体积守门/test+覆盖率）；`main.js` 体积上限 200KB；覆盖率守门从当前基线（lines 55% / branches 44%）起步防回退，目标 70/60 随补测上调；`npm audit` 修复可安全项（11→7），剩余均为 devDependencies（esbuild dev server / jest 链），CI 审计范围限定生产依赖
 - 新增 `tests/shared/VirtualScroller.test.ts`（5 用例：总高度/前缀和 top/二分映射/增量/scrollToBottom）
 
+### Changed (Phase 5 §7.2 — as any 收敛收官)
+
+- `KiloCodeChatRuntime.getMcpStatus` 走 `KiloClientInternals.mcp` 类型化接口（消除 SDK 未导出 mcp 的 `as any`）
+- `runInlineEdit` 的 `catch (err: any)` 改为 `unknown` + `instanceof Error` 判定
+- `i18n.t` 词典遍历改 `unknown` + `Record<string, unknown>` 索引守卫；`ViewActions` 的 editor 回调改用 Obsidian `Editor` 类型
+- 全仓库 `as any`/`: any` 归零（较 Phase 4 计划时点的 20+ 处减少 100%）
+
 ## [0.10.0] - 2026-06-12
 
 ### Fixed

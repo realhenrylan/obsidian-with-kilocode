@@ -4,7 +4,7 @@
 
 import { InlineEditModal } from '../../inline-edit/InlineEditModal';
 import type { CommandRegistry } from '../../commands/SlashCommand';
-import type { App } from 'obsidian';
+import type { App, Editor } from 'obsidian';
 
 export interface ViewActionsDeps {
   app: App;
@@ -12,7 +12,7 @@ export interface ViewActionsDeps {
     id: string;
     name: string;
     callback?: () => void;
-    editorCallback?: (editor: any) => void;
+    editorCallback?: (editor: Editor) => void;
     hotkeys?: Array<{ modifiers: Array<'Mod' | 'Ctrl' | 'Meta' | 'Shift' | 'Alt'>; key: string }>;
   }) => void;
   getInputContainerEl: () => HTMLElement | null;
@@ -47,7 +47,7 @@ export class ViewActions {
   }
 
   /** 显示 Inline Edit 模态框：收集指令后交给 inlineEditRunner 执行 */
-  private showInlineEditModal(selectedText: string, _editor: any): void {
+  private showInlineEditModal(selectedText: string, _editor: Editor): void {
     const modal = new InlineEditModal(this.deps.app, selectedText, (instruction) => {
       this.deps.inlineEditRunner(selectedText, instruction);
     });
