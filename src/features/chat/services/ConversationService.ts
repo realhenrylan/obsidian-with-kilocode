@@ -10,6 +10,26 @@ import { App } from 'obsidian';
 const SAVE_DEBOUNCE_MS = 300;
 
 /**
+ * flushDirty 失败后的重试策略：5s 后自动重试，最多 3 次，仍失败则告警。
+ * 写失败若只依赖下一次消息触发的防抖，长会话静默期可能丢失整段数据。
+ */
+const FLUSH_RETRY_DELAY_MS = 5000;
+const FLUSH_MAX_RETRIES = 3;
+
+/**
+ * 消息文件 schema 版本。
+ * v1: 裸 Message[] 数组（历史格式）；v2: { schemaVersion, messages } 包裹结构，
+ * 为后续字段演进留出迁移空间。
+ */
+const SCHEMA_VERSION = 2;
+
+/** v2 持久化结构 */
+interface PersistedMessages {
+  schemaVersion: number;
+  messages: Message[];
+}
+
+/**
  * 会话服务
  * 管理会话的创建、保存、恢复和删除
  */
@@ -22,6 +42,9 @@ export class ConversationService {
   // 磁盘写入防抖：标记脏会话，延迟批量写入
   private dirtyConversations: Set<string> = new Set();
   private saveTimer: number | null = null;
+  // flushDirty 失败独立重试定时器与计数（成功后归零）
+  private retryTimer: number | null = null;
+  private retryCount = 0;
 
   constructor(app: App, vaultPath: string) {
     this.app = app;
@@ -55,17 +78,37 @@ export class ConversationService {
   private async flushDirty(): Promise<void> {
     const ids = [...this.dirtyConversations];
     this.dirtyConversations.clear();
+    let allSucceeded = true;
     for (const id of ids) {
       const conversation = this.conversations.get(id);
       if (!conversation) continue;
       try {
-        await this.saveMetadata(conversation);
+        // 消息是关键数据，先写；metadata 丢失可由消息重建，反之不行
         await this.saveMessages(conversation);
+        await this.saveMetadata(conversation);
+        this.retryCount = 0;
       } catch (err) {
+        allSucceeded = false;
         console.error('[ConversationService] flushDirty failed for', id, err);
-        // 写入失败时重新标记为脏，下次重试
+        // 写入失败时重新标记为脏，并调度独立重试（而非等下一次消息触发）
         this.dirtyConversations.add(id);
       }
+    }
+
+    if (allSucceeded) return;
+    if (this.retryCount < FLUSH_MAX_RETRIES) {
+      this.retryCount++;
+      if (this.retryTimer !== null) window.clearTimeout(this.retryTimer);
+      this.retryTimer = window.setTimeout(() => {
+        this.retryTimer = null;
+        void this.flushDirty();
+      }, FLUSH_RETRY_DELAY_MS);
+    } else {
+      // 连续重试仍失败：保留内存数据与脏标记，告警提示磁盘异常
+      console.error(
+        '[ConversationService] flushDirty failed after ' + FLUSH_MAX_RETRIES +
+        ' retries; data kept in memory and will be retried on next save',
+      );
     }
   }
 
@@ -92,6 +135,7 @@ export class ConversationService {
       messageCount: 0,
       preview: 'New conversation',
       messages: [],
+      messagesLoaded: true,
     };
 
     this.conversations.set(id, conversation);
@@ -108,7 +152,7 @@ export class ConversationService {
       console.warn('[ConversationService] getConversation: not found:', id);
       return null;
     }
-    if (conversation.messages.length === 0) {
+    if (!conversation.messagesLoaded) {
       await this.loadMessages(conversation);
     }
     return conversation;
@@ -135,6 +179,8 @@ export class ConversationService {
         conversation.preview = message.content.substring(0, 50) + (message.content.length > 50 ? '...' : '');
       }
 
+      // 内存已持有最新消息，标记已加载（否则 getConversation 会用磁盘旧数据覆盖）
+      conversation.messagesLoaded = true;
       // 标记脏并调度防抖写入（而非立即写磁盘）
       this.dirtyConversations.add(conversationId);
       this.scheduleSave();
@@ -149,6 +195,10 @@ export class ConversationService {
     if (this.saveTimer) {
       window.clearTimeout(this.saveTimer);
       this.saveTimer = null;
+    }
+    if (this.retryTimer !== null) {
+      window.clearTimeout(this.retryTimer);
+      this.retryTimer = null;
     }
     await this.flushDirty();
   }
@@ -215,7 +265,7 @@ export class ConversationService {
     }
 
     // 加载源会话消息（如果未加载）
-    if (source.messages.length === 0) {
+    if (!source.messagesLoaded) {
       await this.loadMessages(source);
     }
 
@@ -232,6 +282,7 @@ export class ConversationService {
 
     const newConv = await this.createConversation();
     newConv.messages = forkedMessages;
+    newConv.messagesLoaded = true;
     newConv.messageCount = forkedMessages.length;
     newConv.title = `Fork: ${source.title}`;
     newConv.forkedFrom = sourceId;
@@ -258,7 +309,7 @@ export class ConversationService {
       throw new Error(`Conversation ${conversationId} not found`);
     }
 
-    if (conversation.messages.length === 0) {
+    if (!conversation.messagesLoaded) {
       await this.loadMessages(conversation);
     }
 
@@ -297,7 +348,7 @@ export class ConversationService {
       throw new Error(`Conversation ${conversationId} not found`);
     }
 
-    if (conversation.messages.length === 0) {
+    if (!conversation.messagesLoaded) {
       await this.loadMessages(conversation);
     }
 
@@ -327,7 +378,7 @@ export class ConversationService {
       throw new Error(`Conversation ${id} not found`);
     }
 
-    if (conversation.messages.length === 0) {
+    if (!conversation.messagesLoaded) {
       await this.loadMessages(conversation);
     }
 
@@ -353,11 +404,15 @@ export class ConversationService {
     await adapter.write(path, JSON.stringify(metadata, null, 2));
   }
 
-  /** 保存消息 */
+  /** 保存消息（v2 包裹结构，携带 schema 版本） */
   private async saveMessages(conversation: Conversation): Promise<void> {
     const adapter = this.app.vault.adapter;
     const path = `${this.storagePath}/${conversation.id}.messages.json`;
-    await adapter.write(path, JSON.stringify(conversation.messages, null, 2));
+    const payload: PersistedMessages = {
+      schemaVersion: SCHEMA_VERSION,
+      messages: conversation.messages,
+    };
+    await adapter.write(path, JSON.stringify(payload, null, 2));
   }
 
   /** 加载所有元数据 */
@@ -385,19 +440,43 @@ export class ConversationService {
     }
   }
 
-  /** 加载消息 */
+  /**
+   * 加载消息：兼容 v1（裸数组）与 v2（包裹结构），并对每条消息做最小结构校验。
+   * 校验失败返回空数组并保留原文件（降级不破坏旧数据）；无论成败都标记 messagesLoaded，
+   * 避免空会话每次读取都触发空 IO。
+   */
   private async loadMessages(conversation: Conversation): Promise<void> {
     const adapter = this.app.vault.adapter;
     const path = `${this.storagePath}/${conversation.id}.messages.json`;
+    conversation.messagesLoaded = true;
 
-    if (await adapter.exists(path)) {
-      try {
-        const content = await adapter.read(path);
-        conversation.messages = JSON.parse(content) as Message[];
-      } catch (e) {
-        console.warn(`[ConversationService] Failed to load messages for ${conversation.id}:`, e);
-        conversation.messages = [];
+    if (!(await adapter.exists(path))) {
+      conversation.messages = [];
+      return;
+    }
+
+    try {
+      const content = await adapter.read(path);
+      const parsed = JSON.parse(content) as Message[] | PersistedMessages;
+      let msgs: Message[];
+      if (Array.isArray(parsed)) {
+        msgs = parsed; // v1 历史格式
+      } else if (parsed && Array.isArray((parsed as PersistedMessages).messages)) {
+        msgs = (parsed as PersistedMessages).messages;
+      } else {
+        throw new Error('unrecognized messages schema');
       }
+      // 最小结构校验：id/role 缺失视为损坏数据
+      const valid = msgs.every(m => m && typeof m.id === 'string' && typeof m.role === 'string');
+      if (!valid) {
+        console.warn('[ConversationService] Corrupt message entries in ' + conversation.id + ', discarding file contents');
+        conversation.messages = [];
+        return;
+      }
+      conversation.messages = msgs;
+    } catch (e) {
+      console.warn(`[ConversationService] Failed to load messages for ${conversation.id}:`, e);
+      conversation.messages = [];
     }
   }
 

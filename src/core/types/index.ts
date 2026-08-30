@@ -18,6 +18,8 @@ export interface ConversationMeta {
 /** 完整会话 */
 export interface Conversation extends ConversationMeta {
   messages: Message[];
+  /** 消息是否已从磁盘加载（懒加载标记，避免空会话反复触发空 IO） */
+  messagesLoaded?: boolean;
   sessionId?: string | null;
   providerState?: Record<string, unknown>;
   forkedFrom?: string;        // fork 来源会话 ID

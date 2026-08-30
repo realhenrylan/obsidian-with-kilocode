@@ -15,6 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **流式超时（§6.1.5）**: `prompt` 请求加超时（复用 `idleTimeoutSeconds` 语义，下限 30s），CLI 卡死时自动 abort 并 yield error，用户无需手动 Cancel
 - 新增 `tests/providers/kilocode/runtime-reconnect.test.ts`（5 用例：探活重建/不误重建/会话重试/PATH 恢复/超时）
 
+### Changed (Phase 4 §6.2 — ConversationService 数据可靠性)
+
+- **schema 版本化（§6.2.1）**: 消息文件升级为 v2 包裹结构 `{ schemaVersion: 2, messages }`；读取兼容 v1 裸数组历史格式
+- **关键数据先行（§6.2.2 简化版）**: `flushDirty` 写入顺序调整为消息文件先于元数据（消息丢失不可重建，元数据可），失败保留内存数据与脏标记
+- **失败定时重试（§6.2.3）**: 写入失败 5s 后自动重试（独立于下一次消息的防抖触发），最多 3 次，仍失败打印告警；`flush()` 会清理重试定时器
+- **懒加载标记（§6.2.4）**: `Conversation` 新增 `messagesLoaded`，四处 `messages.length === 0` 判断替换，消除空会话每次读取的空 IO；`loadMessages` 对每条消息做最小结构校验，损坏数据降级为空数组且保留原文件
+- 新增 `tests/features/chat/services/conversation-retry.test.ts`（5 用例：v2 写入/v1 兼容/损坏降级/失败重试/无空 IO）
+
 ## [0.10.0] - 2026-06-12
 
 ### Fixed
