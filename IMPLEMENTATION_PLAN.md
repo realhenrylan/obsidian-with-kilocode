@@ -811,7 +811,35 @@ Phase 3 完成后更新 Implemented 列表；Phase 5 完成后补充 `CONTRIBUTI
   - §5.1 文本替换覆盖主要 UI 面，Toolbar/Notice 等次要文本按计划分四批已基本完成，剩余零星硬编码在 Phase 5 清理
 - 后续遗留：§5.4 Inline Edit、§5.5 剩余（temperature 透传 / chatViewPlacement）、Phase 4
 
-```
+### Phase 4 — 完成 2026-08-30
+- 达成：
+  - §6.1 探活自动重建：`sendMessage` 入口 `ensureAlive()`（GET 探活 3s 超时，进程死亡自动 stop+start）；sessionId 失效（session not found）清空重建重试一次；stop/cancel/sendApproval 空体 catch 全部补日志；`ensureServer` PATH 增强改 try/finally 临时生效（消除全局累积污染）；prompt 超时（复用 idleTimeoutSeconds，下限 30s，超时自动 abort）
+  - §6.2 消息文件 schema v2（`{ schemaVersion: 2, messages }`，v1 裸数组兼容读取）；flushDirty 关键数据先行（messages 先于 metadata）+ 5s 失败重试（3 次上限告警）；`Conversation.messagesLoaded` 懒加载标记替换 4 处空数组判断（消除空会话空 IO）；loadMessages 最小结构校验 + 损坏降级保留原文件
+  - §6.3 下载前查询 npm dist integrity（sha512）/shasum（sha1）校验，不匹配抛错不落地；writeBinary 原子写（.new 临时文件 + 换名 + 失败清理）；where.exe/PowerShell/npm root -g 全部 promisify 异步化；系统 kilo 命中后 `kilo --version` 与固定版本比对，不符降级下载；阶段式进度 Notice（500ms 节流）
+  - §6.4 PINNED_CLI_VERSION 由 esbuild `define` 从 package.json 的 `@kilocode/sdk` 版本注入（`KILOCODE_SDK_VERSION`），单一来源
+  - 新测试：runtime-reconnect.test.ts（5）+ conversation-retry.test.ts（5）+ binary-integrity.test.ts（6）
+- 偏差：
+  - §6.1.5 流式超时基于当前 prompt 请求-响应模式实现（计划假设的 SSE 订阅模式不存在），复用 idleTimeoutSeconds 语义
+  - §6.2.2 原子写采用计划的「简化版」（写入顺序 + 失败重试 + 内存兜底），未做 .tmp+rename（DataAdapter 无 rename API）
+- 后续遗留：Phase 5
+
+### Phase 5 — 完成 2026-08-30
+- 达成：
+  - §7.1 tsconfig 四组渐进开启全量 strict（strictBindCallApply/strictFunctionTypes → useUnknownInCatchVariables → noUnusedLocals/noUnusedParameters → noImplicitReturns/noFallthroughCasesInSwitch），0 error
+  - §7.2 `as any`/`: any` 全仓库归零（runtime mcp 类型化接口 / catch unknown / i18n 索引守卫 / Editor 类型）
+  - §7.3 生产构建 esbuild `pure` 移除 console.log/debug/info（warn/error 保留）
+  - §7.4 死代码删除：parseSSEBlock/parseEvent（noUnusedLocals 揪出）；view 早期 @ 下拉方案（initMentionService/showMentionDropdown/onMentionSelected/closeMentionDropdown）与只写字段
+  - §7.5 xattr 参数化（spawnSync）；cliPath 长度上限 + 换行/NUL 拒绝；.gitignore 补 .kilocode/ 与 data.json
+  - §7.6 VirtualScroller 重写为估算+实测回填（前缀和 offsets + 二分定位 + rAF 批量测量 + 锚点稳定重排）；修复每帧仅测量单项的门闩缺陷；阈值 50→20
+  - §7.7 CI 拆 5 并行 job；main.js 体积守门 200KB；覆盖率守门（lines 55/branches 44 基线起步）；npm audit fix（11→7，剩余均为 devDeps）；生产依赖审计 0 漏洞
+  - §7.8 CONTRIBUTING.md 新建；ROADMAP.md 与实施记录同步
+  - 附带功能修复：CustomInstructionModal 的 Apply 会话级指令此前未进入发送链路，经 SendOrchestratorDeps.getAppliedCustomInstructions 注入生效
+- 偏差：
+  - 覆盖率守门从当前基线（55/44）起步而非计划的 70/60——当前整体 57.2/45.5，KiloCodeView 大文件拉低整体；守门防回退，目标随补测上调
+  - §7.6.3 DOM LRU 缓存（Tab 切换缓存）评估为高风险低收益（重渲染正确性风险），暂缓并记录
+  - `as any` 收敛幅度超计划目标（计划减 80%，实际 100% 归零）
+- 后续遗留：ROADMAP「进行中」的 Phase C（审批端到端验证）/ Phase D（Subagent 编排）
+
 模板：
 ### Phase X — 完成 YYYY-MM-DD
 - 达成：[关键验收点列表]
