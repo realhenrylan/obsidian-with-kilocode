@@ -23,6 +23,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **懒加载标记（§6.2.4）**: `Conversation` 新增 `messagesLoaded`，四处 `messages.length === 0` 判断替换，消除空会话每次读取的空 IO；`loadMessages` 对每条消息做最小结构校验，损坏数据降级为空数组且保留原文件
 - 新增 `tests/features/chat/services/conversation-retry.test.ts`（5 用例：v2 写入/v1 兼容/损坏降级/失败重试/无空 IO）
 
+### Changed (Phase 4 §6.3-6.4 — BinaryManager 完整性)
+
+- **下载校验和（§6.3.1）**: 下载前查询 npm dist 的 `integrity`（sha512）/`shasum`（sha1），tarball 校验不匹配立即抛错终止，损坏数据不再落地
+- **原子写（§6.3.1）**: 二进制先写 `.new` 临时文件、成功后换名；任一步失败清理临时文件，现有二进制不受影响
+- **execSync 异步化（§6.3.2）**: `where.exe`/PowerShell 查找与 `npm root -g` 改为 `promisify(exec)`，消除 PowerShell 启动阻塞 UI 数秒
+- **版本一致性（§6.3.3）**: 系统/全局 kilo 命中后运行 `kilo --version` 与固定版本比对，不符降级走下载，避免 SDK/CLI 协议错配
+- **下载进度反馈（§6.3.4）**: 下载链路增加阶段式进度 Notice（manifest/downloading/verifying/extracting，节流 500ms）
+- **PINNED_CLI_VERSION 解耦（§6.4）**: esbuild `define` 从 `package.json` 的 `@kilocode/sdk` 版本注入 `KILOCODE_SDK_VERSION`，消除手动同步漂移
+- **xattr 参数化（§7.5.1 顺手收口）**: `execSync` 字符串拼接改为 `spawnSync` 参数数组，消除路径含引号的命令注入
+- 新增 `tests/core/binary/binary-integrity.test.ts`（6 用例：原子写失败不半成品/sha512+sha1 校验/无校验信息跳过/版本单一来源）
+
 ## [0.10.0] - 2026-06-12
 
 ### Fixed

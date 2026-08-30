@@ -1,12 +1,20 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync, spawn } from 'child_process';
+import { exec, spawn, spawnSync } from 'child_process';
+import { promisify } from 'util';
 import { Notice } from 'obsidian';
 import type { KiloCodeSettings } from '../types';
 import { detectPlatform, type PlatformInfo } from './PlatformDetector';
-import { downloadBinary } from './npmDownloader';
+import { downloadBinary, type DownloadProgress } from './npmDownloader';
 
-const PINNED_CLI_VERSION = '7.3.1';
+/** 构建期由 esbuild define 注入（package.json 的 @kilocode/sdk 版本），测试环境未定义走 fallback */
+declare const KILOCODE_SDK_VERSION: string | undefined;
+
+/** 单一来源：与 @kilocode/sdk 依赖同版本（§6.4 解耦手动同步） */
+const PINNED_CLI_VERSION: string =
+  typeof KILOCODE_SDK_VERSION !== 'undefined' ? KILOCODE_SDK_VERSION : '7.3.1';
+
+const execAsync = promisify(exec);
 
 export interface DetectionResult {
   path: string;
@@ -64,15 +72,15 @@ export class BinaryManager {
 
     // Phase 2: Try finding from system PATH (with shell support for .cmd on Windows)
     const pathBinary = await this.findInPath();
-    if (pathBinary) {
+    if (pathBinary && await this.isCompatibleVersion(pathBinary)) {
       this.cachedPath = pathBinary;
       this.cachedMethod = 'system-path';
       return pathBinary;
     }
 
     // Phase 3: Scan known global npm install locations
-    const globalBinary = this.findInGlobalPaths();
-    if (globalBinary) {
+    const globalBinary = await this.findInGlobalPaths();
+    if (globalBinary && await this.isCompatibleVersion(globalBinary)) {
       this.cachedPath = globalBinary;
       this.cachedMethod = 'global-npm';
       return globalBinary;
@@ -106,7 +114,7 @@ export class BinaryManager {
     if (localBinary) return { path: localBinary, method: 'plugin-bin-dir' };
     const pathBinary = await this.findInPath();
     if (pathBinary) return { path: pathBinary, method: 'system-path' };
-    const globalBinary = this.findInGlobalPaths();
+    const globalBinary = await this.findInGlobalPaths();
     if (globalBinary) return { path: globalBinary, method: 'global-npm' };
     return null;
   }
@@ -123,7 +131,7 @@ export class BinaryManager {
 
     if (process.platform === 'win32') {
       try {
-        const whereResult = this.findWithWhere();
+        const whereResult = await this.findWithWhere();
         if (whereResult) return whereResult;
       } catch { /* ignore: where.exe failed */ }
     }
@@ -142,41 +150,46 @@ export class BinaryManager {
       proc.on('exit', (code) => {
         if (code !== 0) { resolve(null); return; }
         console.debug('[KiloCode] spawnWithShell: kilo --version succeeded');
-        if (isWin) {
-          const wherePath = this.findWithWhere();
-          if (wherePath) { resolve(wherePath); return; }
-        }
-        resolve('kilo');
+        void (async () => {
+          if (isWin) {
+            const wherePath = await this.findWithWhere();
+            if (wherePath) { resolve(wherePath); return; }
+          }
+          resolve('kilo');
+        })();
       });
     });
   }
 
-  private findWithWhere(): string | null {
+  /** where.exe 查找（异步化，避免 PowerShell 启动阻塞 UI 数秒） */
+  private async findWithWhere(): Promise<string | null> {
+    let result: string;
     try {
-      let result;
+      result = (await execAsync('where.exe kilo 2>nul', { timeout: 5000, windowsHide: true })).stdout.trim();
+    } catch {
       try {
-        result = execSync('where.exe kilo 2>nul', { encoding: 'utf8', timeout: 5000, windowsHide: true }).trim();
-      } catch {
-        result = execSync(
+        result = (await execAsync(
           'powershell -NoProfile -NonInteractive -Command "(Get-Command kilo).Source"',
-          { encoding: 'utf8', timeout: 5000, windowsHide: true }
-        ).trim();
+          { timeout: 5000, windowsHide: true },
+        )).stdout.trim();
+      } catch {
+        return null;
       }
-      const lines = result.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      for (const line of lines) {
-        if (line && fs.existsSync(line)) {
-          console.debug('[KiloCode] findWithWhere: found', line);
-          return line;
-        }
+    }
+    const lines = result.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      if (line && fs.existsSync(line)) {
+        console.debug('[KiloCode] findWithWhere: found', line);
+        return line;
       }
-    } catch { /* ignore: where.exe/kilo not found */ }
+    }
     return null;
   }
 
   /**
    * Strategy 2: Check known global npm install locations.
    */
-  private findInGlobalPaths(): string | null {
+  private async findInGlobalPaths(): Promise<string | null> {
     const appData = process.env.APPDATA;
     const localAppData = process.env.LOCALAPPDATA;
     const userProfile = process.env.USERPROFILE;
@@ -207,9 +220,9 @@ export class BinaryManager {
       } catch { /* ignore: candidate path not accessible */ }
     }
 
-    // Deep scan: find kilocode native binary under npm global
+    // Deep scan: find kilocode native binary under npm global（异步化避免阻塞 UI）
     try {
-      const globalRoot = execSync('npm root -g', { encoding: 'utf8', timeout: 10000, windowsHide: true }).trim();
+      const globalRoot = (await execAsync('npm root -g', { timeout: 10000, windowsHide: true })).stdout.trim();
       if (globalRoot) {
         const found = this.searchNpmGlobalDir(globalRoot);
         if (found) return found;
@@ -269,10 +282,19 @@ export class BinaryManager {
 
     for (const source of sources) {
       for (let attempt = 0; attempt < 2; attempt++) {
+        // 阶段式进度 Notice（tarball 无法流式分块），节流 500ms
+        let lastProgressNotice = 0;
+        const showStage = (progress: DownloadProgress): void => {
+          const now = Date.now();
+          if (now - lastProgressNotice < 500) return;
+          lastProgressNotice = now;
+          new Notice('KiloCode: ' + progress.stage + '...', 0);
+        };
         try {
           const { binaryBuffer } = await downloadBinary(
             source.packageName, PINNED_CLI_VERSION,
-            this.platformInfo.binaryName, source.registry
+            this.platformInfo.binaryName, source.registry,
+            { onProgress: showStage },
           );
           const binaryPath = this.writeBinary(binaryBuffer);
           new Notice('KiloCode initialized successfully! Ready to code.', 5000);
@@ -299,13 +321,23 @@ export class BinaryManager {
     return sources;
   }
 
+  /** 原子写：先写临时文件，全部成功后换名；中途失败删除 .new，现有二进制不受影响 */
   private writeBinary(binaryBuffer: Buffer): string {
     if (!this.platformInfo) throw new Error('Platform not detected');
     if (!fs.existsSync(this.binDir)) fs.mkdirSync(this.binDir, { recursive: true });
     const binaryPath = path.join(this.binDir, this.platformInfo.binaryName);
-    if (fs.existsSync(binaryPath)) fs.unlinkSync(binaryPath);
-    fs.writeFileSync(binaryPath, binaryBuffer);
-    if (process.platform !== 'win32') fs.chmodSync(binaryPath, 0o755);
+    const tmpPath = binaryPath + '.new';
+    try {
+      fs.writeFileSync(tmpPath, binaryBuffer);
+      if (process.platform !== 'win32') fs.chmodSync(tmpPath, 0o755);
+      // Windows 的 rename 不覆盖已存在文件，先移除旧二进制（新文件此刻已就绪）
+      if (fs.existsSync(binaryPath)) fs.unlinkSync(binaryPath);
+      fs.renameSync(tmpPath, binaryPath);
+    } catch (err) {
+      // 换名失败时清理临时文件，避免下次检测到半成品
+      try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch { /* best effort */ }
+      throw err;
+    }
     this.handleMacOSQuarantine(binaryPath);
     this.writeVersionFile(PINNED_CLI_VERSION);
     return binaryPath;
@@ -324,12 +356,42 @@ export class BinaryManager {
   private handleMacOSQuarantine(binaryPath: string): void {
     if (process.platform !== 'darwin') return;
     try {
-      execSync('xattr -d com.apple.quarantine "' + binaryPath + '"', { timeout: 3000 });
+      // 参数化调用避免路径含引号时的命令注入（§7.5.1）
+      spawnSync('xattr', ['-d', 'com.apple.quarantine', binaryPath], { timeout: 3000 });
     } catch { /* ignore: xattr not available */ }
   }
 
   private getBinaryName(): string {
     return process.platform === 'win32' ? 'kilo.exe' : 'kilo';
+  }
+
+  /**
+   * 校验系统/global 二进制版本与 PINNED_CLI_VERSION 一致（§6.3.3）。
+   * 无法运行或版本不符都返回 false，降级走下载路径，避免 SDK/CLI 协议错配。
+   */
+  private async isCompatibleVersion(binaryPath: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const isWin = process.platform === 'win32';
+      const proc = spawn(binaryPath, ['--version'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 5000,
+        shell: isWin,
+        windowsHide: true,
+      });
+      let out = '';
+      proc.stdout?.on('data', (d: Buffer) => { out += d.toString('utf8'); });
+      proc.on('error', () => resolve(false));
+      proc.on('exit', (code) => {
+        if (code !== 0) { resolve(false); return; }
+        const m = out.match(/(\d+\.\d+\.\d+)/);
+        if (!m) { resolve(false); return; }
+        const compatible = m[1] === PINNED_CLI_VERSION;
+        if (!compatible) {
+          console.warn('[KiloCode] System kilo version', m[1], '!= pinned', PINNED_CLI_VERSION, '- falling back to download');
+        }
+        resolve(compatible);
+      });
+    });
   }
 }
 
