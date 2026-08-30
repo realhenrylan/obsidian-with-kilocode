@@ -66,6 +66,8 @@ const context = await esbuild.context({
   outfile: path.join(cwd, "main.js"),
   minify: prod,
   define: { KILOCODE_SDK_VERSION: JSON.stringify(sdkVersion) },
+  // 生产构建移除调试日志（§7.3），保留 console.warn/error 供用户诊断
+  pure: prod ? ["console.log", "console.debug", "console.info"] : [],
   plugins: [sdkResolvePlugin],
 });
 

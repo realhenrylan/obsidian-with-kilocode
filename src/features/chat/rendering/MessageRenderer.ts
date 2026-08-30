@@ -135,7 +135,8 @@ export class MessageRenderer {
   renderMessages(messages: Message[]): void {
     this.container.empty();
 
-    if (messages.length > 50) {
+    // 超过阈值启用虚拟滚动（§7.6.2：50 -> 20，降低首帧全量 Markdown 渲染压力）
+    if (messages.length > 20) {
       const scroller = new VirtualScroller<Message>(
         this.container,
         { itemHeight: 100, overscan: 5 },

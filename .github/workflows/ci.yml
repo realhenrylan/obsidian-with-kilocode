@@ -11,7 +11,7 @@ on:
       - master
 
 jobs:
-  build:
+  typecheck:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -29,11 +29,87 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
       - name: Lint
         run: npm run lint
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # 审计生产依赖（devDependencies 的 esbuild/jest 链漏洞不影响运行时产物，另行跟踪升级）
+      - name: Security audit (prod deps, moderate+)
+        run: npm audit --omit=dev --audit-level=moderate
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
 
       - name: Build
         run: npm run build
 
-      - name: Run tests
-        run: npm test
+      # 产物体积守门：超出阈值说明引入了意外依赖（§7.7）
+      - name: Bundle size check
+        run: |
+          SIZE=$(wc -c < main.js)
+          MAX=$((200 * 1024))
+          echo "main.js size: ${SIZE} bytes (max ${MAX})"
+          if [ "$SIZE" -gt "$MAX" ]; then
+            echo "::error::main.js exceeds 200KB bundle size limit"
+            exit 1
+          fi
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      # 覆盖率守门（§7.7）：从当前基线起步防回退，目标 70%/60% 随补测逐步上调
+      - name: Run tests with coverage
+        run: npx jest --coverage --coverageThreshold='{"global":{"lines":55,"branches":44}}'

@@ -42,9 +42,10 @@ export class BinaryManager {
 
   async getBinaryPath(settings: KiloCodeSettings): Promise<string> {
     // Phase 0: Manual path in settings takes priority
+    // 基本校验（§7.5.3）：长度上限 + 禁止换行（防路径被注入额外命令参数），存在性由 existsSync 保证
     if (settings.cliPath && settings.cliPath.trim()) {
       const manualPath = settings.cliPath.trim();
-      if (fs.existsSync(manualPath)) {
+      if (manualPath.length <= 1024 && !/[\r\n\0]/.test(manualPath) && fs.existsSync(manualPath)) {
         console.log('[KiloCode] Using manual cliPath:', manualPath);
         this.cachedPath = manualPath;
         this.cachedMethod = 'manual-settings';

@@ -41,6 +41,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **功能修复**：`CustomInstructionModal` 的 Apply 会话级指令此前未进入发送链路（仅弹提示）；现通过 `SendOrchestratorDeps.getAppliedCustomInstructions` 注入 `MessageContext.customInstructions`，Apply 真正生效
 - 测试 371 全绿、typecheck 0 error、build 0 error
 
+### Changed (Phase 5 §7.3/§7.5/§7.6/§7.7 — 加固与性能)
+
+- **调试日志清理（§7.3）**: 生产构建通过 esbuild `pure` 标记移除 `console.log/debug/info`，保留 `warn/error` 供用户诊断；源码保留开发期日志
+- **cliPath 注入防护（§7.5.3）**: 手动 CLI 路径增加长度上限（1024）与换行/NUL 字符拒绝；xattr 已在 §6.3 参数化
+- **.gitignore 加固（§7.5.2）**: 补充 `.kilocode/` 与插件 `data.json` 模式，防止敏感配置入库
+- **虚拟滚动动态高度（§7.6.1）**: `VirtualScroller` 改为估算 + 实测回填模型——前缀和（offsets）支持二分定位、渲染后 rAF 批量测量、差异 >1px 触发锚点稳定的重排；修复原实现每帧仅测量单项的门闩缺陷
+- **虚拟滚动阈值（§7.6.2）**: 启用阈值 50 → 20，降低长会话首帧 Markdown 渲染压力
+- **CI 加固（§7.7）**: 拆分 5 个并行 job（typecheck/lint/audit/build+体积守门/test+覆盖率）；`main.js` 体积上限 200KB；覆盖率守门从当前基线（lines 55% / branches 44%）起步防回退，目标 70/60 随补测上调；`npm audit` 修复可安全项（11→7），剩余均为 devDependencies（esbuild dev server / jest 链），CI 审计范围限定生产依赖
+- 新增 `tests/shared/VirtualScroller.test.ts`（5 用例：总高度/前缀和 top/二分映射/增量/scrollToBottom）
+
 ## [0.10.0] - 2026-06-12
 
 ### Fixed
