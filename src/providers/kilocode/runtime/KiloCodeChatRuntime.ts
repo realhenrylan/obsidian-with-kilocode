@@ -12,6 +12,24 @@ import { QUESTION_PROTOCOL } from './prompts';
 
 const DEFAULT_AGENT = 'code';
 const SERVE_TIMEOUT = 15000;
+/** 健康检查（探活）超时：进程死连接会立即 ECONNREFUSED，超时视为僵死 */
+const HEALTH_CHECK_TIMEOUT = 3000;
+
+/** 为 Promise 加超时限制；超时后调用 onTimeout 供调用方中断底层操作 */
+async function withTimeout<T>(p: Promise<T>, ms: number, onTimeout?: () => void): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      onTimeout?.();
+      reject(new Error(`Operation timed out after ${ms}ms`));
+    }, ms);
+  });
+  try {
+    return await Promise.race([p, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 interface KiloSession {
   create(params: { body: Record<string, unknown>; signal?: AbortSignal }): Promise<{ error?: unknown; data?: { id: string } }>;
@@ -185,10 +203,15 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     if (this.client && this.sessionId) {
       try {
         await (this.client.session as unknown as KiloSession).abort({ path: { id: this.sessionId } });
-      } catch { /* ignore: session already ended */ }
+      } catch (err) {
+        // 会话可能已随进程结束，仅记录便于诊断
+        console.warn('[KiloCodeChatRuntime] session abort during stop failed:', err);
+      }
     }
     if (this.serverHandle) {
-      try { this.serverHandle.close(); } catch { /* ignore: server already closed */ }
+      try { this.serverHandle.close(); } catch (err) {
+        console.warn('[KiloCodeChatRuntime] server close during stop failed:', err);
+      }
     }
     this.client = null;
     this.serverHandle = null;
@@ -231,7 +254,8 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.clearIdleTimer();
     this.abortController?.abort();
     if (this.client && this.sessionId) {
-      void (this.client.session as unknown as KiloSession).abort({ path: { id: this.sessionId } }).catch(() => {});
+      void (this.client.session as unknown as KiloSession).abort({ path: { id: this.sessionId } })
+        .catch((err) => console.warn('[KiloCodeChatRuntime] cancel abort failed:', err));
     }
     this.streaming = false;
   }
@@ -239,6 +263,8 @@ export class KiloCodeChatRuntime implements ChatRuntime {
   async *sendMessage(content: string, context?: MessageContext): AsyncGenerator<StreamChunk> {
     this.clearIdleTimer();
     await this.start(context?.vaultPath);
+    // 进程可能在空闲超时/崩溃后已死：探活失败自动重建，避免后续所有调用静默失败
+    await this.ensureAlive();
     if (!this.client || !this.serverHandle) {
       yield this.emit({ type: 'error', error: 'KiloCode server is not ready' });
       yield this.emit({ type: 'done' });
@@ -247,18 +273,16 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     this.streaming = true;
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
+    // prompt 空闲超时：CLI 卡死时用户无需手动 Cancel（复用 idleTimeoutSeconds 语义）
+    const promptTimeoutMs = Math.max((this.getSettings().idleTimeoutSeconds ?? 120), 30) * 1000;
     try {
       if (!this.sessionId) {
-        const sessionResult = await (this.client.session as unknown as KiloSession).create({
-          body: { agent: DEFAULT_AGENT, ...this.buildModelConfig() },
-          signal,
-        });
-        if (sessionResult.error) {
-          yield this.emit({ type: 'error', error: String(sessionResult.error) });
+        const created = await this.createSession(signal);
+        if (!created) {
+          yield this.emit({ type: 'error', error: 'Failed to create session' });
           yield this.emit({ type: 'done' });
           return;
         }
-        this.sessionId = sessionResult.data!.id;
       }
 
       const t0 = performance.now();
@@ -268,14 +292,26 @@ export class KiloCodeChatRuntime implements ChatRuntime {
         enhancedContent += `\n\n[User Custom Instructions]\n${context.customInstructions}`;
       }
 
-      const promptResult = await (this.client.session as unknown as KiloSession).prompt({
-        path: { id: this.sessionId },
-        body: {
-          agent: DEFAULT_AGENT,
-          parts: [{ type: 'text', text: enhancedContent }],
-        },
-        signal,
-      });
+      let promptResult = await withTimeout(
+        this.promptSession(enhancedContent, signal),
+        promptTimeoutMs,
+        () => this.abortController?.abort(),
+      );
+      if (promptResult.error && this.isSessionGone(String(promptResult.error))) {
+        // CLI 端会话失效（如 serve 重启后 sessionId 过期）：重建会话重试一次
+        console.warn('[KiloCodeChatRuntime] session gone, recreating and retrying once');
+        this.sessionId = null;
+        if (!(await this.createSession(signal))) {
+          yield this.emit({ type: 'error', error: 'Failed to recreate session' });
+          yield this.emit({ type: 'done' });
+          return;
+        }
+        promptResult = await withTimeout(
+          this.promptSession(enhancedContent, signal),
+          promptTimeoutMs,
+          () => this.abortController?.abort(),
+        );
+      }
       if (promptResult.error) {
         yield this.emit({ type: 'error', error: String(promptResult.error) });
         yield this.emit({ type: 'done' });
@@ -310,12 +346,72 @@ export class KiloCodeChatRuntime implements ChatRuntime {
     }
   }
 
+  /**
+   * 探活：对 serve 发一个轻量 GET（连接成功即认为进程存活，不关心状态码）。
+   * 失败说明进程已死（崩溃/被杀），stop 后重建，避免后续调用静默失败。
+   */
+  private async ensureAlive(): Promise<void> {
+    if (!this.serverHandle || !this.client) return;
+    try {
+      const res = await withTimeout(this.boundFetch(this.serverHandle.url), HEALTH_CHECK_TIMEOUT);
+      void res; // 只验证连接，不消费响应体
+    } catch (err) {
+      console.warn('[KiloCodeChatRuntime] health check failed, restarting server:', err);
+      try {
+        await this.stop();
+        await this.start(this.vaultPath ?? undefined);
+      } catch (restartErr) {
+        console.error('[KiloCodeChatRuntime] server restart failed:', restartErr);
+      }
+    }
+  }
+
+  /** 创建 CLI 会话；失败返回 null（错误已记录） */
+  private async createSession(signal: AbortSignal): Promise<string | null> {
+    if (!this.client) return null;
+    try {
+      const sessionResult = await (this.client.session as unknown as KiloSession).create({
+        body: { agent: DEFAULT_AGENT, ...this.buildModelConfig() },
+        signal,
+      });
+      if (sessionResult.error) {
+        console.error('[KiloCodeChatRuntime] session.create error:', sessionResult.error);
+        return null;
+      }
+      this.sessionId = sessionResult.data!.id;
+      return this.sessionId;
+    } catch (err) {
+      console.error('[KiloCodeChatRuntime] session.create failed:', err);
+      return null;
+    }
+  }
+
+  private promptSession(content: string, signal: AbortSignal) {
+    return (this.client as unknown as { session: KiloSession }).session.prompt({
+      path: { id: this.sessionId! },
+      body: {
+        agent: DEFAULT_AGENT,
+        parts: [{ type: 'text', text: content }],
+      },
+      signal,
+    });
+  }
+
+  /** 判断错误是否为会话失效（serve 重启后旧 sessionId 不再存在） */
+  private isSessionGone(errStr: string): boolean {
+    const lower = errStr.toLowerCase();
+    return lower.includes('not found') || lower.includes('404') || lower.includes('session');
+  }
+
   sendApproval?(toolName: string, decision: 'allow' | 'deny'): void {
     if (this.client && this.sessionId) {
       void (this.client as unknown as KiloClientInternals).postSessionIdPermissionsPermissionId({
         path: { id: this.sessionId, permissionID: toolName },
         body: { decision },
-      }).catch(() => {});
+      }).catch((err) => {
+        // 审批回执丢失会导致 CLI 端工具调用永久挂起，必须留下诊断信息
+        console.error('[KiloCodeChatRuntime] Failed to send approval:', err);
+      });
     }
   }
 
@@ -357,28 +453,40 @@ export class KiloCodeChatRuntime implements ChatRuntime {
       }
     }
 
+    // PATH 增强：把 CLI 所在目录（及 Windows 的 npm 全局目录）临时前插，仅作用于
+    // 本次 serve 进程 spawn；finally 恢复，避免多窗口/多次启动累积污染全局 PATH。
+    // createKiloServer 无 env 选项，只能借助 process.env 传递给子进程。
+    const prevPath = process.env.PATH;
     process.env.PATH = pathDirs.join(pathSep);
-    console.debug('[KiloCode] ensureServer: cliPath=' + cliPath + ' method=' + (typeof this.binaryManager.getDetectionMethod === 'function' ? this.binaryManager.getDetectionMethod() : 'unknown'));
+    try {
+      console.debug('[KiloCode] ensureServer: cliPath=' + cliPath + ' method=' + (typeof this.binaryManager.getDetectionMethod === 'function' ? this.binaryManager.getDetectionMethod() : 'unknown'));
 
-    // 路径 A：插件级 MCP 配置（vault/.kilocode/mcp.json）透传给 kilo serve（KILO_CONFIG_CONTENT）
-    let mcpConfig: Record<string, unknown> | null = null;
-    if (this.mcpConfigProvider) {
-      try {
-        mcpConfig = await this.mcpConfigProvider();
-      } catch (err) {
-        // MCP 配置读取失败不应阻塞 serve 启动
-        console.error('[KiloCode] Failed to read MCP config, starting serve without it:', err);
+      // 路径 A：插件级 MCP 配置（vault/.kilocode/mcp.json）透传给 kilo serve（KILO_CONFIG_CONTENT）
+      let mcpConfig: Record<string, unknown> | null = null;
+      if (this.mcpConfigProvider) {
+        try {
+          mcpConfig = await this.mcpConfigProvider();
+        } catch (err) {
+          // MCP 配置读取失败不应阻塞 serve 启动
+          console.error('[KiloCode] Failed to read MCP config, starting serve without it:', err);
+        }
+      }
+
+      this.serverHandle = await createKiloServer({
+        hostname: '127.0.0.1',
+        port: 0,
+        timeout: SERVE_TIMEOUT,
+        cors: ['app://obsidian.md'],
+        // mcp.json 是 JSON 文件内容（unknown），此处安全转换为 SDK Config 结构
+        ...(mcpConfig ? { config: { mcp: mcpConfig } as Config } : {}),
+      });
+    } finally {
+      if (prevPath !== undefined) {
+        process.env.PATH = prevPath;
+      } else {
+        delete process.env.PATH;
       }
     }
-
-    this.serverHandle = await createKiloServer({
-      hostname: '127.0.0.1',
-      port: 0,
-      timeout: SERVE_TIMEOUT,
-      cors: ['app://obsidian.md'],
-      // mcp.json 是 JSON 文件内容（unknown），此处安全转换为 SDK Config 结构
-      ...(mcpConfig ? { config: { mcp: mcpConfig } as Config } : {}),
-    });
     this.client = createKiloClient({
       baseUrl: this.serverHandle.url,
       fetch: this.boundFetch,

@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Changed (Phase 4 §6.1 — Runtime 健壮性)
+
+- **健康检查与自动重连（§6.1.1）**: `sendMessage` 入口新增 `ensureAlive()` 探活——对 `kilo serve` 发轻量 GET（3s 超时），进程崩溃/被杀后自动 `stop + start` 重建，不再静默失败
+- **sessionId 失效自动重建（§6.1.2）**: `prompt` 返回 session not found 类错误时清空 `sessionId` 重建会话并重试一次（覆盖 serve 重启后旧会话过期场景）
+- **错误吞没收敛（§6.1.3）**: `stop()`/`cancel()`/`sendApproval()` 的静默 `catch` 全部补上 `console.warn/error`（审批回执丢失会导致 CLI 端工具调用挂起，必须留痕）
+- **PATH 隔离（§6.1.4）**: `ensureServer` 的 PATH 增强改为 try/finally 临时生效，spawn 后恢复原值，消除多窗口/多次启动的全局 PATH 累积污染
+- **流式超时（§6.1.5）**: `prompt` 请求加超时（复用 `idleTimeoutSeconds` 语义，下限 30s），CLI 卡死时自动 abort 并 yield error，用户无需手动 Cancel
+- 新增 `tests/providers/kilocode/runtime-reconnect.test.ts`（5 用例：探活重建/不误重建/会话重试/PATH 恢复/超时）
+
 ## [0.10.0] - 2026-06-12
 
 ### Fixed
