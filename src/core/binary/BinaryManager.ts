@@ -237,6 +237,10 @@ export class BinaryManager {
   }
 
   private searchNpmGlobalDir(globalRoot: string): string | null {
+    // 入口防御（§7.5.1）：npm 全局根必须是绝对路径，非绝对或空串直接忽略
+    if (typeof globalRoot !== 'string' || globalRoot.length === 0 || !path.isAbsolute(globalRoot)) {
+      return null;
+    }
     const cliDir = path.join(globalRoot, '@kilocode', 'cli');
     if (!fs.existsSync(cliDir)) return null;
 

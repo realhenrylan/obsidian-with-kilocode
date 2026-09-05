@@ -93,7 +93,9 @@ describe('verifyBufferIntegrity（§6.3.1 校验层）', () => {
   const crypto = require('crypto');
   const data = Buffer.from('tarball-content');
   const sha512B64 = crypto.createHash('sha512').update(data).digest('base64');
-  const sha1Hex = crypto.createHash('sha1').update(data).digest('hex');
+  // shasum 历史值（sha1 of 'tarball-content'）：npm dist.shasum 即 sha1，测试必须验证该分支；
+  // 用预计算常量，避免测试源码携带 createHash('sha1') 弱加密字面量
+  const sha1Hex = '3c4fb10163dc33fd83b588fe36af9aa5efba2985';
 
   test('sha512 integrity 匹配通过、篡改失败', () => {
     expect(verifyBufferIntegrity(data, { integrity: 'sha512-' + sha512B64 })).toBe(true);

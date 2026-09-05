@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 
 export interface PlatformInfo {
   platform: 'windows' | 'darwin' | 'linux';
@@ -40,7 +40,8 @@ export function supportsAvx2(): boolean {
 
   if (platform === 'darwin') {
     try {
-      const result = execSync('sysctl -n hw.optional.avx2_0', { encoding: 'utf8', timeout: 1500 });
+      // 参数化调用（无 shell）：固定参数数组，规避 shell 解析与命令注入（§7.5.1）
+      const result = execFileSync('sysctl', ['-n', 'hw.optional.avx2_0'], { encoding: 'utf8', timeout: 1500 });
       return result.trim() === '1';
     } catch {
       return false;
@@ -49,19 +50,32 @@ export function supportsAvx2(): boolean {
 
   if (platform === 'windows') {
     const cmd = '(Add-Type -MemberDefinition "[DllImport(""kernel32.dll"")] public static extern bool IsProcessorFeaturePresent(int ProcessorFeature);" -Name Kernel32 -Namespace Win32 -PassThru)::IsProcessorFeaturePresent(40)';
-    for (const exe of ['powershell.exe', 'pwsh.exe']) {
-      try {
-        const result = execSync(`${exe} -NoProfile -NonInteractive -Command "${cmd}"`, {
-          encoding: 'utf8',
-          timeout: 3000,
-          windowsHide: true,
-        });
-        const out = result.trim().toLowerCase();
-        if (out === 'true' || out === '1') return true;
-        if (out === 'false' || out === '0') return false;
-      } catch {
-        continue;
-      }
+    try {
+      // 参数化调用（无 shell）：PowerShell 命令文本作为单个参数传递，避免 shell 引号解析与命令注入（§7.5.1）
+      const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', cmd], {
+        encoding: 'utf8',
+        timeout: 3000,
+        windowsHide: true,
+      });
+      if (result.status !== 0) throw new Error(`powershell exit code ${result.status}`);
+      const out = (result.stdout || '').trim().toLowerCase();
+      if (out === 'true' || out === '1') return true;
+      if (out === 'false' || out === '0') return false;
+    } catch {
+      // 继续尝试 pwsh.exe
+    }
+    try {
+      const result = spawnSync('pwsh.exe', ['-NoProfile', '-NonInteractive', '-Command', cmd], {
+        encoding: 'utf8',
+        timeout: 3000,
+        windowsHide: true,
+      });
+      if (result.status !== 0) return false;
+      const out = (result.stdout || '').trim().toLowerCase();
+      if (out === 'true' || out === '1') return true;
+      if (out === 'false' || out === '0') return false;
+    } catch {
+      // 两个 shell 均不可用，按不支持 AVX2 处理
     }
     return false;
   }
@@ -82,7 +96,7 @@ export function isMusl(): boolean {
   }
 
   try {
-    const result = execSync('ldd --version', { encoding: 'utf8', timeout: 1500 });
+    const result = execFileSync('ldd', ['--version'], { encoding: 'utf8', timeout: 1500 });
     const text = (result || '').toLowerCase();
     if (text.includes('musl')) return true;
   } catch {

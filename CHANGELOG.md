@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed (Security — Mimosa 快速静态审计)
+
+- **Windows AVX2 探测参数化（§7.5.1 收口）**: `supportsAvx2` 的 Windows 分支由 `execSync` shell 字符串拼接（`${exe} -Command "${cmd}"`）改为 `spawnSync` 参数数组（无 shell），消除 shell 引号解析与命令注入面；`powershell.exe`/`pwsh.exe` 逐字面量探测，行为保持降级不变
+- **macOS/Linux 探测参数化（§7.5.1 续，Git 门 L3 复查）**: `sysctl -n hw.optional.avx2_0` 与 `ldd --version` 改为 `execFileSync` 参数数组（无 shell），与 Windows 分支同一致
+- **searchNpmGlobalDir 入口防御（Git 门 L3）**: 入口增加绝对路径校验（`path.isAbsolute`），非绝对/空串直接忽略，封住 path-traversal 入口想象面（调用方均为 `npm root -g`/OS 环境路径）
+- **校验测试弱加密字面量消除**: `binary-integrity.test.ts` 的 shasum 分支改用预计算 sha1 常量（拟合 npm dist.shasum 协议），测试语义不变，测试源码不再携带 `createHash('sha1')`
+- 新增 `tests/core/binary/avx2-windows.test.ts`（3 用例：AVX2 存在/不存在/powershell 失败回退 pwsh）
+
 ### Changed (Phase 4 §6.1 — Runtime 健壮性)
 
 - **健康检查与自动重连（§6.1.1）**: `sendMessage` 入口新增 `ensureAlive()` 探活——对 `kilo serve` 发轻量 GET（3s 超时），进程崩溃/被杀后自动 `stop + start` 重建，不再静默失败

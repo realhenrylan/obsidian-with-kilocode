@@ -11,6 +11,7 @@ coverage/
 .jest-tmp/
 .kilo-probe-*/
 .playwright-mcp/
+.mimosa/
 docs/
 *.orig*
 .obsidian/plugins/*/data.json
